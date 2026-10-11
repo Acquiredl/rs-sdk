@@ -98,13 +98,7 @@ def_int $requested_deposit = last_int;
 if_close;
 p_delay(0);
 def_int $coffer_space = sub(5000000, %misc_coffers);
-def_int $deposit_amt = $requested_deposit;
-
-if ($deposit_amt > $coffer_space) {
-    $deposit_amt = $coffer_space;
-} else if($deposit_amt > $inv_coins) {
-    $deposit_amt = $inv_coins;
-}
+def_int $deposit_amt = min($requested_deposit, min($coffer_space, $inv_coins));
 
 if ($deposit_amt > 0) {
     inv_del(inv, coins, $deposit_amt);
@@ -132,6 +126,10 @@ p_countdialog;
 def_int $withdraw_amt = last_int;
 if_close;
 p_delay(0);
+if ($withdraw_amt <= 0) {
+    ~open_manage_miscellania_interface;
+    return;
+}
 if ($withdraw_amt > %misc_coffers) {
     $withdraw_amt = %misc_coffers;
 }

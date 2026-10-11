@@ -373,6 +373,10 @@ Upgrade hazards:
 - [ ] **`scripts/login_logout/login.rs2`** — random-event timer gated on `map_random_events`.
 - [ ] **`scripts/macro events/scripts/macro_events.rs2`** — macro events disabled when off.
 - [ ] **`scripts/shop/configs/shop.varp`** — `transmit=yes` on shop varps (bot shop state).
+- [ ] **`scripts/minigames/game_managing_miscellania/scripts/managing_miscellania.rs2`** — coffers
+      deposit clamps to `min(requested, coffer space, coins held)`; withdraw returns on a count of
+      0 or less. Reported upstream to LostCity; drop this patch once their 289 branch carries a fix.
+      Verify: `grep -n "withdraw_amt <= 0" scripts/minigames/game_managing_miscellania/scripts/managing_miscellania.rs2`
 - [x] **README art** — moved out of the vendored tree to `docs/media/` (promo.gif, discord.svg,
       hiscores.svg, task_length.svg); nothing in `content/title/` is locally modified anymore.
 - [ ] Smithing arrowheads + telegrab + nails fixes live in content history; they're additive
