@@ -7,6 +7,7 @@ import type ClientPlayer from '#/dash3d/ClientPlayer.js';
 import type ClientObj from '#/dash3d/ClientObj.js';
 import IfType from '#/config/IfType.js';
 import { collectGEState } from './ge-state.js';
+import { getDialogPageId } from './dialog-page.js';
 import ObjType from '#/config/ObjType.js';
 import NpcType from '#/config/NpcType.js';
 import LocType from '#/config/LocType.js';
@@ -335,13 +336,13 @@ export class BotStateCollector implements ScanProvider {
         }
 
         // Get dialog options using client's method if available
-        let options: Array<{ index: number; text: string }> = [];
+        let options: DialogState['options'] = [];
         if (isOpen && typeof this.client.getDialogOptions === 'function') {
             const rawOptions = this.client.getDialogOptions();
-            options = rawOptions.map((opt: any) => ({ index: opt.index, text: opt.text }));
+            options = rawOptions.map((opt: any) => ({ ...opt }));
         }
 
-        return { isOpen, options, isWaiting };
+        return { isOpen, options, isWaiting, pageId: getDialogPageId(c) };
     }
 
     private collectRecentDialogs(currentTick: number, publish: boolean): Array<{ text: string[]; tick: number; interfaceId: number; observationId?: number }> {

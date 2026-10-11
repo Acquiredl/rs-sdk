@@ -366,8 +366,10 @@ export interface CombatEvent {
 
 export interface DialogState {
     isOpen: boolean;
-    options: Array<{ index: number; text: string }>;
+    options: Array<{ index: number; text: string; componentId?: number; buttonType?: number }>;
     isWaiting: boolean;
+    /** Opaque identity of this client dialogue page, for guarded clicks. */
+    pageId?: string;
 }
 
 export interface InterfaceState {
@@ -480,7 +482,7 @@ export type BotAction =
     | { type: 'talkToNpc'; npcIndex: number; reason: string }
     | { type: 'interactNpc'; npcIndex: number; optionIndex: number; reason: string }
     | { type: 'interactPlayer'; playerIndex: number; optionIndex: number; reason: string }
-    | { type: 'clickDialogOption'; optionIndex: number; reason: string }
+    | { type: 'clickDialogOption'; optionIndex: number; reason: string; guard?: { pageId: string; componentId: number } }
     // clickComponent: IF_BUTTON packet - for simple buttons, spellcasting, etc.
     | { type: 'clickComponent'; componentId: number; reason: string }
     // clickComponentWithOption: INV_BUTTON packet - for components with inventory operations (smithing, crafting, etc.)

@@ -1227,7 +1227,8 @@ export class BotSDK {
      * selectable options (the common pattern: pass through narration pages).
      *
      * To click an option by its visible text, prefer `clickDialogByText()`,
-     * which avoids the index-vs-position footgun entirely.
+     * which also binds the click to its observed dialogue page. This low-level
+     * index method does not bind the click to a page.
      *
      * @example
      * ```ts
@@ -1246,9 +1247,14 @@ export class BotSDK {
      * sidestepping the 1-based vs 0-based array-position confusion of
      * `sendClickDialog()`. Matches against `DialogOption.text` (case-insensitive
      * by default for string patterns).
+     * Binds the click to the observed page and component; it never falls back
+     * to an unguarded index when the page changes or the client is too old.
      *
      * @returns ActionResult with `success: false` and `reason: 'no_dialog'` if
      *          no dialog is open, or `reason: 'no_match'` if no option matches.
+     *          A changed page returns `stale_dialog`; read fresh state before
+     *          choosing again. Older clients return `unsupported_client` and
+     *          must be reloaded/restarted to support guarded dialogue clicks.
      *
      * @example
      * ```ts
@@ -1271,7 +1277,20 @@ export class BotSDK {
                 reason: 'no_match'
             };
         }
-        return this.sendClickDialog(match.index);
+        if (!dialog.pageId || match.componentId === undefined) {
+            return {
+                success: false,
+                phase: 'validation',
+                reason: 'unsupported_client',
+                message: 'Client does not support guarded dialogue clicks; update and reload/restart it'
+            };
+        }
+        return this.sendAction({
+            type: 'clickDialogOption',
+            optionIndex: match.index,
+            guard: { pageId: dialog.pageId, componentId: match.componentId },
+            reason: 'SDK'
+        });
     }
 
     /** Click a component using IF_BUTTON packet - for simple buttons, spellcasting, etc. */
