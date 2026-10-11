@@ -263,6 +263,10 @@ async function requireLiveClient(sdk: BotSDK, username: string, server: string |
  * 2. From bot.env sibling to the script (bun bots/mybot/script.ts)
  * 3. From command line arg (bun script.ts mybot)
  *
+ * Returns after cleanup without scheduling process termination, so later
+ * runs and retry delays can safely use the same process. One-shot CLI callers
+ * can explicitly exit after their final run if their own handles remain open.
+ *
  * @example
  * // Just run from the bot directory - auto-finds bot.env:
  * // bun bots/mybot/script.ts
@@ -378,6 +382,7 @@ export async function runScript(
     let error: Error | undefined;
     let unsubscribeConnection: (() => void) | null = null;
     let disconnectReject: ((err: Error) => void) | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     try {
         // Set up connection monitoring
@@ -395,7 +400,6 @@ export async function runScript(
         const promises: Promise<any>[] = [scriptPromise];
 
         // Add timeout if specified
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
         if (timeout) {
             const timeoutPromise = new Promise<never>((_, reject) => {
                 timeoutId = setTimeout(() => reject(new Error(`Script timeout after ${timeout}ms`)), timeout);
@@ -431,12 +435,12 @@ export async function runScript(
         }
 
         result = await Promise.race(promises);
-
-        // Clear timeout if it was set
-        if (timeoutId) clearTimeout(timeoutId);
     } catch (e: any) {
         error = e;
     } finally {
+        // Failures and disconnects must release the deadline too, or a finished
+        // run keeps the process alive until its original timeout expires.
+        if (timeoutId) clearTimeout(timeoutId);
         // Clean up connection listener
         if (unsubscribeConnection) {
             unsubscribeConnection();
@@ -481,21 +485,20 @@ export async function runScript(
         const username = process.env.BOT_USERNAME;
         if (username) {
             console.error(`[Runner] Disconnecting bot "${username}"...`);
-            // Bound the disconnect - a wedged socket must not hang the exit.
-            await Promise.race([
-                sdk.disconnect(),
-                new Promise(resolve => setTimeout(resolve, 10000)),
-            ]);
-            connections.delete(username);
-            // A leaked handle (reconnect timer, half-closed socket) used to
-            // keep the bun process alive for minutes after the script was
-            // done. Unref'd, so it never delays a clean exit; it only fires
-            // when something else is wedging the event loop.
-            const forceExit = setTimeout(() => {
-                console.error('[Runner] Event loop still alive after disconnect - forcing exit');
-                process.exit(process.exitCode ?? 0);
-            }, 5000);
-            forceExit.unref?.();
+            // Bound cleanup, but don't leave its losing timer alive or kill
+            // unrelated work (including the caller's next run) afterwards.
+            let disconnectTimeout: ReturnType<typeof setTimeout> | undefined;
+            try {
+                await Promise.race([
+                    sdk.disconnect(),
+                    new Promise(resolve => {
+                        disconnectTimeout = setTimeout(resolve, 10000);
+                    }),
+                ]);
+            } finally {
+                clearTimeout(disconnectTimeout);
+                connections.delete(username);
+            }
         }
     }
 
