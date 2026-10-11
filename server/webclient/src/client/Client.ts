@@ -8967,13 +8967,13 @@ export class Client extends GameShell {
                 }
                 this.lastTickTime = now;
 
-                // Notify SDK of game tick (PLAYER_INFO arrives once per server tick)
+                this.getPlayerPos(this.in, this.psize);
+                this.awaitingPlayerInfo = false;
+
+                // Publish this tick only after its player update is fully decoded.
                 if (this.onGameTickCallback) {
                     this.onGameTickCallback();
                 }
-
-                this.getPlayerPos(this.in, this.psize);
-                this.awaitingPlayerInfo = false;
 
                 this.ptype = -1;
                 return true;

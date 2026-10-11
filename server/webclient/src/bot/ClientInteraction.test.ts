@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 
 import { ClientProt } from '#/io/ClientProt.js';
+import { ServerProt } from '#/io/ServerProt.js';
 
 mock.module('#3rdparty/tinymidipcm.js', () => ({
     stopMidi() {},
@@ -76,6 +77,8 @@ const { Client } = await import('../client/Client.js');
 const { default: LocType } = await import('#/config/LocType.js');
 const { default: ObjType } = await import('#/config/ObjType.js');
 const { default: IfType } = await import('#/config/IfType.js');
+const { default: Packet } = await import('#/io/Packet.js');
+const { default: ClientPlayer, PlayerUpdate } = await import('#/dash3d/ClientPlayer.js');
 
 const BUTTON_OK = 1;
 const BUTTON_CLOSE = 3;
@@ -84,6 +87,71 @@ const BUTTON_CLOSE = 3;
 function defineComponent(id: number, com: Record<string, unknown>): void {
     IfType.list[id] = { id, ...com } as never;
 }
+
+describe('browser game tick publication', () => {
+    test('publishes decoded player state after PLAYER_INFO completes', async () => {
+        // Teleport the local player to plane 1, tile (55, 56), with a hitmark.
+        // No old/new visible players; 2047 terminates the new-player bit list.
+        const bits = '1' + '11' + '01' + '0110111' + '0111000' + '1' + '1'
+            + '00000000' + '11111111111';
+        const payload = Uint8Array.from([
+            ...bits.match(/.{8}/g)!.map(byte => parseInt(byte, 2)),
+            PlayerUpdate.HITMARK, 7, 1, 23, 30
+        ]);
+        const wire = Uint8Array.from([ServerProt.PLAYER_INFO, 0, payload.length, ...payload]);
+        let readPos = 0;
+        const player = new ClientPlayer();
+        player.teleport(true, 50, 50);
+        player.health = 30;
+        player.totalHealth = 30;
+
+        // Retain the real packet framing and player decoders; only the socket
+        // is replaced so this regression needs no game server or browser.
+        const client = Object.assign(Object.create(Client.prototype), {
+            stream: {
+                get available() { return wire.length - readPos; },
+                async readBytes(dst: Uint8Array, offset: number, length: number) {
+                    dst.set(wire.subarray(readPos, readPos + length), offset);
+                    readPos += length;
+                }
+            },
+            in: new Packet(new Uint8Array(64)),
+            ptype: -1,
+            ptype0: -1,
+            ptype1: -1,
+            ptype2: -1,
+            randomIn: null,
+            localPlayer: player,
+            players: { 2047: player },
+            playerCount: 0,
+            playerIds: new Int32Array(2048),
+            entityRemovalIds: new Int32Array(2048),
+            entityUpdateIds: new Int32Array(2048),
+            minusedlevel: 0,
+            awaitingPlayerInfo: true,
+            lastTickTime: 0
+        });
+        const published: unknown[] = [];
+        client.setOnGameTickCallback(() => published.push({
+            health: player.health,
+            x: player.routeX[0],
+            z: player.routeZ[0],
+            level: client.minusedlevel,
+            awaitingPlayerInfo: client.awaitingPlayerInfo,
+            packetPosition: client.in.pos
+        }));
+
+        expect(await client.tcpIn()).toBe(true);
+        expect(published).toEqual([{
+            health: 23, x: 55, z: 56, level: 1,
+            awaitingPlayerInfo: false, packetPosition: payload.length
+        }]);
+        expect(readPos).toBe(wire.length);
+        expect(client.ptype).toBe(-1);
+        expect(await client.tcpIn()).toBe(false);
+        expect(published).toHaveLength(1);
+    });
+});
 
 describe('ranged spell dispatch', () => {
     test('dispatches a combat spell when adjacency routing fails', () => {
