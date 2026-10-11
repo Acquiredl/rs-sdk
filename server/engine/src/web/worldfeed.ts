@@ -50,7 +50,7 @@ import type { WebSocketData } from './websocket.js';
 const WORLD_FEED_VERSION = 1;
 const MAX_RECT_SIZE = 384;
 const MAX_BUFFERED_BYTES = 1 << 20;
-const ROSTER_INTERVAL_TICKS = 5;
+const ROSTER_INTERVAL_TICKS = 10;
 const MAX_CLIENT_MESSAGE_BYTES = 1024;
 const SLOW_FEED_MS = 20;
 
@@ -590,4 +590,17 @@ function send(ws: ServerWebSocket<WebSocketData>, msg: FeedRecord | string): voi
     } catch {
         subscribers.delete(ws);
     }
+}
+
+// Map dashboards can share one immutable JSON snapshot for a second.
+let positionsAt = -Infinity;
+let positionsJson = '[]';
+export function getPlayerPositionsJson(now = Date.now()): string {
+    if (now - positionsAt >= 1000 || now < positionsAt) {
+        positionsJson = JSON.stringify([...World.playerLoop.all()].map(player => ({
+            x: player.x, z: player.z, level: player.level, name: player.displayName
+        })));
+        positionsAt = now;
+    }
+    return positionsJson;
 }

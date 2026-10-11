@@ -47,7 +47,8 @@ export class MapView extends GameShell {
     playerPositions: {x: number, z: number, level: number, name: string}[] = [];
     playerTrails: Map<string, {x: number, z: number, time: number}[]> = new Map();
     lastPlayerFetch: number = 0;
-    readonly playerPollInterval: number = 750;
+    readonly playerPollInterval: number = 1500;
+    private playerFetchPending = false;
     readonly maxTrailLength: number = 2000;
     readonly maxTrailAge: number = 1800000;
 
@@ -837,7 +838,7 @@ export class MapView extends GameShell {
 
         // custom: poll player positions
         const now: number = performance.now();
-        if (MapView.shouldDrawPlayers && now - this.lastPlayerFetch > this.playerPollInterval) {
+        if (!document.hidden && !this.playerFetchPending && MapView.shouldDrawPlayers && now - this.lastPlayerFetch > this.playerPollInterval) {
             this.lastPlayerFetch = now;
             this.fetchPlayerPositions();
         }
@@ -2041,14 +2042,16 @@ export class MapView extends GameShell {
 
     // custom: fetch player positions from server
     fetchPlayerPositions(): void {
-        fetch('/playerpositions')
+        this.playerFetchPending = true;
+        fetch('/playerpositions', { signal: AbortSignal.timeout(5000) })
             .then(res => res.json())
             .then((data: {x: number, z: number, level: number, name: string}[]) => {
                 this.playerPositions = data;
                 this.updateTrails(data);
                 this.redraw = true;
             })
-            .catch(() => {});
+            .catch(() => {})
+            .finally(() => { this.playerFetchPending = false; });
     }
 
     // custom: fetch and pre-render long-term anonymous traces
