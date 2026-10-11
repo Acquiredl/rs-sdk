@@ -374,9 +374,11 @@ Upgrade hazards:
 - [ ] **`scripts/macro events/scripts/macro_events.rs2`** — macro events disabled when off.
 - [ ] **`scripts/shop/configs/shop.varp`** — `transmit=yes` on shop varps (bot shop state).
 - [ ] **`scripts/minigames/game_managing_miscellania/scripts/managing_miscellania.rs2`** — coffers
-      deposit clamps to `min(requested, coffer space, coins held)`; withdraw returns on a count of
-      0 or less. Reported upstream to LostCity; drop this patch once their 289 branch carries a fix.
-      Verify: `grep -n "withdraw_amt <= 0" scripts/minigames/game_managing_miscellania/scripts/managing_miscellania.rs2`
+      deposit clamps to `min(requested, coffer space, current coins held)` after the count dialog;
+      withdraw rejects non-positive counts and checks the current coffer balance and inventory
+      capacity before transferring money. Report and initial fix by kadeski ([PR #73](https://github.com/MaxBittker/rs-sdk/pull/73)).
+      Reported upstream to LostCity; drop this patch once their 289 branch carries a fix.
+      Verify: from the repo root, `bun test server/engine/test/miscellania-coffers.test.ts` (requires built engine content).
 - [x] **README art** — moved out of the vendored tree to `docs/media/` (promo.gif, discord.svg,
       hiscores.svg, task_length.svg); nothing in `content/title/` is locally modified anymore.
 - [ ] Smithing arrowheads + telegrab + nails fixes live in content history; they're additive
