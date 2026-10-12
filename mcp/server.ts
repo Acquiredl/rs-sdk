@@ -101,7 +101,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             code: {
               type: 'string',
-              description: 'TypeScript code to execute (type annotations are stripped before running). Available globals: bot (BotActions), sdk (BotSDK), Spells (e.g. Spells.HIGH_ALCHEMY). Example: "await bot.chopTree(); return sdk.getState();"'
+              description: 'TypeScript code to execute (type annotations are stripped before running). Available globals: bot (BotActions), sdk (BotSDK), Spells (e.g. Spells.HIGH_ALCHEMY). Example: "const r = await bot.chopTree(); return r;". A world-state summary (position, skills, inventory, nearby entities, open dialogs, new messages) is appended to every result, so there is no need to return sdk.getState() just to look around.'
             },
             timeout: {
               type: 'number',
@@ -276,14 +276,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
             });
 
           let result: any;
+          let failure: Error | null = null;
           try {
             result = await Promise.race([fn(cancellable(connection.bot), cancellable(connection.sdk), Spells), timeoutPromise, cancelPromise]);
+          } catch (err: any) {
+            failure = err instanceof Error ? err : new Error(String(err));
           } finally {
             clearTimeout(timeoutId!);
             if (!signal.aborted) abortController.abort('Execution finished');
           }
 
-          // Build formatted output
+          // Build formatted output. A throw or timeout still gets the console
+          // output and world state - that's when the agent most needs to see
+          // it died, a dialog is open, or it got "I can't reach that".
           const parts: string[] = [];
 
           if (logs.length > 0) {
@@ -291,8 +296,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
             parts.push(logs.lines().join('\n'));
           }
 
-          if (result !== undefined) {
-            if (logs.length > 0) parts.push('');
+          if (failure) {
+            if (parts.length > 0) parts.push('');
+            parts.push('── Error ──');
+            const frames = (failure.stack ?? '').split('\n').filter(l => /^\s+at /.test(l)).slice(0, 6);
+            parts.push([`${failure.name}: ${failure.message}`, ...frames].join('\n'));
+          } else if (result !== undefined) {
+            if (parts.length > 0) parts.push('');
             parts.push('── Result ──');
             parts.push(JSON.stringify(result, null, 2));
           }
@@ -321,7 +331,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
             }
             parts.push('');
             parts.push('── World State ──');
-            parts.push(formatWorldState(state, connection.sdk.getStateAge(), { sinceTick }));
+            parts.push(formatWorldState(state, connection.sdk.getStateAge(), { sinceTick, brief: true }));
           }
 
           // Add reminder for long code
@@ -334,7 +344,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           const output = parts.length > 0 ? parts.join('\n') : '(no output)';
 
           return {
-            content: [{ type: 'text', text: output }]
+            content: [{ type: 'text', text: output }],
+            ...(failure ? { isError: true } : {})
           };
         } finally {
           console.log = originalLog;
