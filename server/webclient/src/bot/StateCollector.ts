@@ -561,6 +561,11 @@ export class BotStateCollector implements ScanProvider {
             this.faceEntitySetCycle = clientCycle;
         }
         let target = BotStateCollector.decodeFaceEntity(rawFaceEntity);
+        // Trading/talking also sets faceEntity. An NPC without Attack is an
+        // interaction target, even during the walk-up grace or a recent fight.
+        if (target.type === 'npc' && !c.npc?.[target.index]?.type?.op?.some((op: string | null) => op !== null && /^attack$/i.test(op))) {
+            target = { type: 'none', index: -1 };
+        }
         // combatCycle is set to loopCycle + 400 when damage is taken/dealt
         // So if combatCycle > loopCycle, we're in combat (within 400 ticks of last hit)
         const combatCycle = player.combatCycle ?? -1000;
