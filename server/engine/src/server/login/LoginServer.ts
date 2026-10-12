@@ -213,7 +213,7 @@ async function updateQuestHiscore(account: HiscoreAccount, player: Player, profi
 // rs-sdk: outfit + bank boards are also refreshed on autosave (not just logout), so players who
 // stay online for days don't sit on a stale value. Autosave posts every online player in one
 // burst, so writes are skipped when the row hasn't changed - most banks don't move in 15 min.
-async function updateWealthHiscores(account: HiscoreAccount, player: Player, profile: string) {
+export async function updateWealthHiscores(account: HiscoreAccount, player: Player, profile: string) {
     // Update outfit hiscore
     const worn = player.getInventory(InvType.WORN);
     if (worn) {
@@ -266,18 +266,16 @@ async function updateWealthHiscores(account: HiscoreAccount, player: Player, pro
                 }
             }
 
-            if (bankItems.length > 0) {
-                // Sort by value descending so the most valuable items appear first
-                bankItems.sort((a, b) => b.value - a.value);
-                const bankItemsJson = JSON.stringify(bankItems);
-                const existingBank = await db.selectFrom('hiscore_bank').select(['value', 'items']).where('account_id', '=', account.id).where('profile', '=', profile).executeTakeFirst();
-                if (existingBank && existingBank.value === bankTotalValue && existingBank.items === bankItemsJson) {
-                    // unchanged
-                } else if (existingBank) {
-                    await db.updateTable('hiscore_bank').set({ value: bankTotalValue, items: bankItemsJson, date: toDbDate(new Date()) }).where('account_id', '=', account.id).where('profile', '=', profile).execute();
-                } else {
-                    await db.insertInto('hiscore_bank').values({ account_id: account.id, profile, value: bankTotalValue, items: bankItemsJson }).execute();
-                }
+            // Empty banks must also replace old snapshots, otherwise withdrawn items remain ranked.
+            bankItems.sort((a, b) => b.value - a.value);
+            const bankItemsJson = JSON.stringify(bankItems);
+            const existingBank = await db.selectFrom('hiscore_bank').select(['value', 'items']).where('account_id', '=', account.id).where('profile', '=', profile).executeTakeFirst();
+            if (existingBank && existingBank.value === bankTotalValue && existingBank.items === bankItemsJson) {
+                // unchanged
+            } else if (existingBank) {
+                await db.updateTable('hiscore_bank').set({ value: bankTotalValue, items: bankItemsJson, date: toDbDate(new Date()) }).where('account_id', '=', account.id).where('profile', '=', profile).execute();
+            } else if (bankItems.length > 0) {
+                await db.insertInto('hiscore_bank').values({ account_id: account.id, profile, value: bankTotalValue, items: bankItemsJson }).execute();
             }
         }
     }
