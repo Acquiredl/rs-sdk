@@ -6,19 +6,23 @@ Successful patterns for mining automation.
 
 Rocks are **locations** (not NPCs). Filter for rocks with a "Mine" option:
 
+The client names live rocks `Rocks copper ore`, `Rocks tin ore`, and so on.
+Use `/copper ore/i` to find a rock; `/^copper ore$/i` matches the inventory item only.
+Depleted rocks can appear as plain `Rocks`; select a live ore-specific rock again.
+
 ```typescript
 const state = sdk.getState();
 const rock = state?.nearbyLocs
-    .filter(loc => /rocks?/i.test(loc.name))
-    .filter(loc => loc.optionsWithIndex.some(o => /^mine$/i.test(o.text)))
-    .sort((a, b) => a.distance - b.distance)[0];
+  .filter((loc) => /rocks?/i.test(loc.name))
+  .filter((loc) => loc.optionsWithIndex.some((o) => /^mine$/i.test(o.text)))
+  .sort((a, b) => a.distance - b.distance)[0];
 ```
 
 ## Mining Action
 
 ```typescript
-if (!rock) throw new Error('No mineable rock nearby');
-const result = await bot.interactLoc(rock, 'mine');
+if (!rock) throw new Error("No mineable rock nearby");
+const result = await bot.mineRock(rock);
 if (!result.success) console.warn(result.reason, result.message);
 ```
 
@@ -36,18 +40,15 @@ const isMining = animation === 625;
 const isIdle = animation === -1;
 ```
 
-
-
-
 **Note:** Al Kharid mine is full of Lvl 14 scorpions. Combat 27+ with defensive style is enough to survive while mining. The scorpion fights actually train Defence passively.
 
 ## Reliable Locations
 
-| Location | Coordinates | Notes |
-|----------|-------------|-------|
-| SE Varrock mine | (3285, 3365) | Copper, tin, iron |
-| Al Kharid mine | (3295, 3287) | Iron, coal, gold, silver, mithril, tin. Scorpions! |
-| Lumbridge Swamp mine | - | Interactions fail silently, avoid |
+| Location             | Coordinates  | Notes                                              |
+| -------------------- | ------------ | -------------------------------------------------- |
+| SE Varrock mine      | (3285, 3365) | Copper, tin, iron                                  |
+| Al Kharid mine       | (3295, 3287) | Iron, coal, gold, silver, mithril, tin. Scorpions! |
+| Lumbridge Swamp mine | -            |                                                    |
 
 **Getting to Al Kharid mine from Lumbridge:** Pay 10gp toll at gate (3268, 3227), walk NE. Dialog sequence: continue → continue → "Yes, ok." (index 3) → continue.
 
@@ -55,11 +56,11 @@ const isIdle = animation === -1;
 
 ```typescript
 function countOre() {
-    const state = sdk.getState();
-    if (!state) return 0;
-    return state.inventory
-        .filter(i => /ore$/i.test(i.name))
-        .reduce((sum, i) => sum + i.count, 0);
+  const state = sdk.getState();
+  if (!state) return 0;
+  return state.inventory
+    .filter((i) => /ore$/i.test(i.name))
+    .reduce((sum, i) => sum + i.count, 0);
 }
 ```
 
@@ -67,12 +68,12 @@ function countOre() {
 
 ```typescript
 const state = sdk.getState();
-if (!state) throw new Error('No world state');
+if (!state) throw new Error("No world state");
 if (state.inventory.length >= 28) {
-    const ores = state.inventory.filter(i => /ore$/i.test(i.name));
-    for (const ore of ores) {
-        await sdk.sendDropItem(ore.slot);
-        await new Promise(r => setTimeout(r, 100));
-    }
+  const ores = state.inventory.filter((i) => /ore$/i.test(i.name));
+  for (const ore of ores) {
+    await sdk.sendDropItem(ore.slot);
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 ```

@@ -20,14 +20,14 @@ Mining is used to extract ores and metals from rocks. Requires a pickaxe (availa
 | 1 | Rune essence | Varrock, Yanille rune essence mines |
 | 1 | Tin | SW Varrock, SE Varrock, Rimmington |
 | 1 | Copper | SW Varrock, SE Varrock, Rimmington |
-| 10 | Iron | Asgarnian Ice Dungeon, Al Kharid |
-| 15 | Silver | SE Varrock, Fight Arena, Al Kharid |
-| 20 | Coal | Al Kharid, SW Varrock, Crafting Guild |
-| 30 | Gold | Dwarven Mine, Coal Trucks, Barbarian Village, Mining Guild |
-| 40 | Mithril | North Brimhaven, Crafting Guild |
+| 15 | Iron | SE Varrock, Asgarnian Ice Dungeon, Al Kharid |
+| 20 | Silver | SE Varrock, Fight Arena, Al Kharid |
+| 30 | Coal | Al Kharid, SW Varrock, Crafting Guild |
+| 40 | Gold | Dwarven Mine, Coal Trucks, Barbarian Village, Mining Guild |
+| 55 | Mithril | North Brimhaven, Crafting Guild |
 | 40 | Gems | Shilo Village (requires Shilo Village quest) |
-| 55 | Adamantite | Al Kharid, Fight Arena, West Lumbridge Swamp, Mining Guild |
-| 70 | Runite | Al Kharid, West Lumbridge Swamp, Grand Tree, Desert Mining Camp |
+| 70 | Adamantite | Al Kharid, Fight Arena, West Lumbridge Swamp, Mining Guild |
+| 85 | Runite | Al Kharid, West Lumbridge Swamp, Grand Tree, Desert Mining Camp |
 
 ## Mining Guild
 

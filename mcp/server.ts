@@ -17,11 +17,10 @@ import {
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { botManager } from './api/index.js';
-import { formatWorldState } from '../sdk/formatter.js';
 import { initPathfinding } from '../sdk/pathfinding.js';
-import { Spells } from '../sdk/spells.js';
 import { marketTool, readMarket } from './market-tools.js';
-import { ConsoleCapture } from './console-capture.js';
+import { installExecutionConsoleCapture } from './console-capture.js';
+import { executeCode, botExecutions } from './execute-code.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -91,7 +90,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       marketTool,
       {
         name: 'execute_code',
-        description: 'Execute TypeScript code on a bot. Auto-connects using credentials from bots/{name}/bot.env. The code runs in an async context with bot (BotActions), sdk (BotSDK), and Spells (spell component ids) available. WARNING: many MCP clients cap tool-call waits at ~60s; if the client gives up, the code KEEPS RUNNING on the bot until it finishes or hits the timeout - keep interactive snippets short and put long loops in a bots/{name}/*.ts script instead.',
+        description: 'Execute TypeScript code on a bot. Auto-connects using credentials from bots/{name}/bot.env. The code runs in an async context with bot (BotActions), sdk (BotSDK), and Spells (spell component ids) available. A new call for the same bot cancels the one still running. Timeout or explicit MCP cancellation stops SDK dispatches and observations, including inside high-level actions. Keep interactive snippets short; use a saved script with the existing browser client for long loops.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -105,7 +104,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             timeout: {
               type: 'number',
-              description: 'Execution timeout in minutes (default: 2, max: 60). Note: the MCP client may stop waiting sooner (often ~60s) - the code still runs to completion on the bot.'
+              description: 'Execution timeout in minutes (default: 2, max: 60).'
             }
           },
           required: ['bot_name', 'code']
@@ -152,7 +151,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           return errorResponse('Bot name is required');
         }
 
-        await botManager.disconnect(botName);
+        // Supersedes any execution still running on this bot.
+        await botExecutions.run(botName, extra.signal, async () => botManager.disconnect(botName));
         return successResponse({ message: `Disconnected bot "${botName}"` });
       }
 
@@ -176,182 +176,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           return errorResponse('code is required');
         }
 
-        const isLongCode = code.length > 2000;
-
-        // Capture console output BEFORE connecting to prevent SDK logs from corrupting MCP JSON-RPC stdout
-        const logs = new ConsoleCapture();
-        const originalLog = console.log;
-        const originalWarn = console.warn;
-        const originalError = console.error;
-
-        // Errors need special-casing: JSON.stringify(new Error(...)) is '{}',
-        // which used to swallow every console.log(err) into two braces.
-        const fmtLogArg = (a: unknown): string => {
-          if (a instanceof Error) return a.stack ?? `${a.name}: ${a.message}`;
-          if (typeof a === 'object' && a !== null) {
-            try { return JSON.stringify(a, null, 2) ?? String(a); } catch { return String(a); }
-          }
-          return String(a);
-        };
-        console.log = (...args) => logs.push(args.map(fmtLogArg).join(' '));
-        console.warn = (...args) => logs.push('[warn] ' + args.map(fmtLogArg).join(' '));
-        // Don't capture console.error - let it go to stderr for MCP debugging
-
-        // Auto-connect if not already connected
-        let connection = botManager.get(botName);
-        if (!connection) {
-          console.error(`[MCP] Bot "${botName}" not connected, auto-connecting...`);
-          connection = await botManager.connect(botName);
-          // Wait up to 15s for initial world state after fresh connection
-          try {
-            await connection.sdk.waitForCondition(() => connection!.sdk.getState() !== null, 15000);
-          } catch {
-            console.error(`[MCP] Warning: initial state not received within 15s for bot "${botName}"`);
-          }
-        }
-
-        try {
-          // The tool advertises TypeScript, so strip type syntax (non-null !,
-          // annotations, generics) before evaluation - new Function() alone
-          // rejects TS with a bare SyntaxError. Fall back to evaluating the
-          // raw code so plain JS behaves exactly as before if transpilation
-          // trips on something.
-          const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-          let fn: (bot: unknown, sdk: unknown, spells: unknown) => Promise<unknown>;
-          try {
-            // The assignment keeps the wrapper from being tree-shaken as a
-            // side-effect-free expression (which yields empty output).
-            const transpiled = new Bun.Transpiler({ loader: 'ts' })
-              .transformSync(`globalThis.__rsExecFn = (async (bot, sdk, Spells) => {\n${code}\n})`);
-            (0, eval)(transpiled);
-            fn = (globalThis as any).__rsExecFn;
-            delete (globalThis as any).__rsExecFn;
-            if (typeof fn !== 'function') throw new Error('transpile produced no function');
-          } catch {
-            fn = new AsyncFunction('bot', 'sdk', 'Spells', code);
-          }
-
-          // Execute code with configurable timeout + MCP cancellation signal
-          const timeoutMinutes = Math.min(Math.max((args?.timeout as number) || 2, 0.1), 60);
-          const EXECUTION_TIMEOUT = timeoutMinutes * 60 * 1000;
-          let timeoutId: ReturnType<typeof setTimeout>;
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error(`Code execution timed out after ${timeoutMinutes} minute(s)`)), EXECUTION_TIMEOUT);
-          });
-
-          // AbortController that fires on MCP cancellation
-          const abortController = new AbortController();
-          const signal = abortController.signal;
-
-          if (extra.signal) {
-            if (extra.signal.aborted) {
-              abortController.abort(extra.signal.reason);
-            } else {
-              extra.signal.addEventListener('abort', () => {
-                console.error(`[MCP] execute_code cancelled by client for bot "${botName}"`);
-                abortController.abort('Cancelled by client');
-              }, { once: true });
-            }
-          }
-
-          const cancelPromise = new Promise<never>((_, reject) => {
-            signal.addEventListener('abort', () => {
-              reject(new Error(typeof signal.reason === 'string' ? signal.reason : 'Code execution cancelled'));
-            }, { once: true });
-          });
-
-          // Wrap bot and sdk in proxies that throw on every method call once cancelled
-          const cancellable = <T extends object>(target: T): T =>
-            new Proxy(target, {
-              get(obj, prop, receiver) {
-                const value = Reflect.get(obj, prop, receiver);
-                if (typeof value === 'function') {
-                  return (...args: any[]) => {
-                    if (signal.aborted) throw new Error('Execution cancelled');
-                    return value.apply(obj, args);
-                  };
-                }
-                return value;
-              }
-            });
-
-          let result: any;
-          let failure: Error | null = null;
-          try {
-            result = await Promise.race([fn(cancellable(connection.bot), cancellable(connection.sdk), Spells), timeoutPromise, cancelPromise]);
-          } catch (err: any) {
-            failure = err instanceof Error ? err : new Error(String(err));
-          } finally {
-            clearTimeout(timeoutId!);
-            if (!signal.aborted) abortController.abort('Execution finished');
-          }
-
-          // Build formatted output. A throw or timeout still gets the console
-          // output and world state - that's when the agent most needs to see
-          // it died, a dialog is open, or it got "I can't reach that".
-          const parts: string[] = [];
-
-          if (logs.length > 0) {
-            parts.push('── Console ──');
-            parts.push(logs.lines().join('\n'));
-          }
-
-          if (failure) {
-            if (parts.length > 0) parts.push('');
-            parts.push('── Error ──');
-            const frames = (failure.stack ?? '').split('\n').filter(l => /^\s+at /.test(l)).slice(0, 6);
-            parts.push([`${failure.name}: ${failure.message}`, ...frames].join('\n'));
-          } else if (result !== undefined) {
-            if (parts.length > 0) parts.push('');
-            parts.push('── Result ──');
-            parts.push(JSON.stringify(result, null, 2));
-          }
-
-          // Append formatted world state. The connection's tick cursor
-          // advances each call so repeat execute_code invocations only show
-          // NEW chat / system messages — old ones the bot already saw don't
-          // get re-emitted. Cursor lives on BotConnection (MCP-only concern)
-          // so the SDK surface stays minimal for script authors.
-          const state = connection.sdk.getState();
-          if (state) {
-            // Message ticks are the client's loopCycle, which restarts near 0
-            // when the bot page reloads. If every tick is below our cursor the
-            // client reloaded — reset the cursor or chat would be muted forever.
-            if (state.gameMessages && state.gameMessages.length > 0 &&
-                state.gameMessages.every(m => m.tick < connection.lastShownMessageTick)) {
-              connection.lastShownMessageTick = -1;
-            }
-            const sinceTick = connection.lastShownMessageTick;
-            if (state.gameMessages) {
-              for (const m of state.gameMessages) {
-                if (m.tick > connection.lastShownMessageTick) {
-                  connection.lastShownMessageTick = m.tick;
-                }
-              }
-            }
-            parts.push('');
-            parts.push('── World State ──');
-            parts.push(formatWorldState(state, connection.sdk.getStateAge(), { sinceTick, brief: true }));
-          }
-
-          // Add reminder for long code
-          if (isLongCode) {
-            parts.push('');
-            parts.push('── Tip ──');
-            parts.push(`Long script detected. Consider writing to a .ts file and running with: bun run bots/${botName}/script.ts`);
-          }
-
-          const output = parts.length > 0 ? parts.join('\n') : '(no output)';
-
-          return {
-            content: [{ type: 'text', text: output }],
-            ...(failure ? { isError: true } : {})
-          };
-        } finally {
-          console.log = originalLog;
-          console.warn = originalWarn;
-          console.error = originalError;
-        }
+        const timeoutMinutes = Math.min(Math.max((args?.timeout as number) || 2, 0.1), 60);
+        return executeCode(botManager, botName, code, timeoutMinutes * 60_000, extra.signal);
       }
 
       default:
@@ -381,6 +207,7 @@ function errorResponse(message: string) {
 
 // Start server
 async function main() {
+  installExecutionConsoleCapture();
   console.error('[MCP Server] Starting RS-Agent MCP server v2.0...');
   console.error('[MCP Server] Bots auto-connect on the first execute_code call.');
 

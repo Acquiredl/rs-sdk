@@ -9,6 +9,41 @@
  * and count everything dropped in between so memory stays constant.
  */
 
+import { executionContext } from '../sdk/execution-context';
+import { redactCredentials } from '../sdk/redact';
+
+export function formatLogArgument(value: unknown): string {
+  let text: string;
+  if (value instanceof Error) text = value.stack ?? `${value.name}: ${value.message}`;
+  else if (value instanceof RegExp) text = String(value);
+  else if (typeof value === 'object' && value !== null) {
+    try {
+      text = JSON.stringify(value, (key, item) => /^(password|token|secret|api[_-]?key)$/i.test(key)
+        ? '[REDACTED]' : item instanceof RegExp ? String(item) : item, 2) ?? String(value);
+    } catch { text = String(value); }
+  } else text = String(value);
+  return redactCredentials(text);
+}
+
+const LEVELS = { log: 'log', info: 'log', debug: 'log', dir: 'log', warn: 'warn', error: 'error' } as const;
+let restore: (() => void) | undefined;
+
+/** Route each execution's console (user code and SDK alike) to its own buffer; keep everything else off MCP stdout. Idempotent. */
+export function installExecutionConsoleCapture(): () => void {
+  if (restore) return restore;
+  const original = { ...console };
+  for (const [method, level] of Object.entries(LEVELS) as [keyof typeof LEVELS, 'log' | 'warn' | 'error'][]) {
+    console[method] = (...args: unknown[]) => {
+      const context = executionContext.getStore();
+      // A finished execution's leftover timers still carry its scope; nobody reads that buffer.
+      if (context?.log && !context.signal.aborted) context.log(level, args);
+      else original.error(...args.map(formatLogArgument));
+    };
+  }
+  restore = () => { Object.assign(console, original); restore = undefined; };
+  return restore;
+}
+
 export const CONSOLE_HEAD_LINES = 300;
 export const CONSOLE_TAIL_LINES = 300;
 export const CONSOLE_MAX_LINE_CHARS = 2000;

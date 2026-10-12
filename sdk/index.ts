@@ -32,6 +32,8 @@ import type {
 import type { TradeState } from './types';
 import { PRAYER_INDICES, PRAYER_NAMES, PLAYER_CHAT_TYPES, isPlayerChat, TRADE_REQUEST_CHAT_TYPE } from './types';
 import { ChatHistory } from './chat-history';
+import { executionContext, executionWait, throwIfExecutionAborted } from './execution-context';
+import { redactCredentials } from './redact';
 import * as pathfinding from './pathfinding';
 import { resolveInterfaceOption, shortestNameMatch, type InterfaceOptionSelector } from './action-quantity';
 
@@ -227,6 +229,7 @@ export class BotSDK {
 
     /** Connect to the gateway WebSocket. */
     async connect(): Promise<void> {
+        throwIfExecutionAborted();
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             return;
         }
@@ -260,6 +263,7 @@ export class BotSDK {
         }
 
         const configuredUrl = this.config.gatewayUrl || `ws://${this.config.host}:${this.config.port}`;
+        throwIfExecutionAborted();
         this.connectPromise = preferDirectGateway(configuredUrl).then(url => new Promise<void>((resolve, reject) => {
             if (this.intentionalDisconnect) {
                 reject(new Error('Disconnected while connecting'));
@@ -415,7 +419,9 @@ export class BotSDK {
 
         console.log(`[BotSDK] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempt})`);
 
-        this.reconnectTimer = setTimeout(async () => {
+        // Reconnect belongs to the connection, not to the execution that first
+        // opened its socket; that execution may already be cancelled/finished.
+        this.reconnectTimer = executionContext.exit(() => setTimeout(async () => {
             this.reconnectTimer = null;
             try {
                 await this.connect();
@@ -423,7 +429,7 @@ export class BotSDK {
             } catch (e) {
                 console.log(`[BotSDK] Reconnection attempt ${this.reconnectAttempt} failed`);
             }
-        }, delay);
+        }, delay));
     }
 
     /** Disconnect from the gateway. */
@@ -569,15 +575,17 @@ export class BotSDK {
      * Falls back to printing the URL if no browser can be opened.
      */
     async launchBrowser(): Promise<void> {
+        throwIfExecutionAborted();
         const url = this.buildClientUrl();
-        console.log(`[BotSDK] Opening browser: ${url}`);
+        console.log(`[BotSDK] Opening browser: ${redactCredentials(url)}`);
 
         try {
             const open = (await import('open')).default;
+            throwIfExecutionAborted();
             await open(url);
         } catch (e) {
             console.warn(`[BotSDK] Could not open browser automatically.`);
-            console.warn(`[BotSDK] Open this URL manually: ${url}`);
+            console.warn(`[BotSDK] Open the bot client for ${this.config.botUsername} manually using the credentials in its bot.env file.`);
         }
     }
 
@@ -593,6 +601,7 @@ export class BotSDK {
         console.log(`[BotSDK] Waiting for bot to connect and load game (timeout: ${timeoutMs}ms)...`);
 
         while (Date.now() - startTime < timeoutMs) {
+            throwIfExecutionAborted();
             attemptCount++;
             const elapsed = Date.now() - startTime;
             const status = await this.checkBotStatus();
@@ -683,27 +692,14 @@ export class BotSDK {
 
     /** Wait for WebSocket connection to be established. */
     async waitForConnection(timeout: number = 60000): Promise<void> {
-        if (this.isConnected()) {
-            return;
-        }
-
-        return new Promise((resolve, reject) => {
-            const timeoutId = setTimeout(() => {
-                unsubscribe();
-                reject(new Error('waitForConnection timed out'));
-            }, timeout);
-
-            const unsubscribe = this.onConnectionStateChange((state) => {
-                if (state === 'connected') {
-                    clearTimeout(timeoutId);
-                    unsubscribe();
-                    resolve();
-                } else if (state === 'disconnected') {
-                    clearTimeout(timeoutId);
-                    unsubscribe();
-                    reject(new Error('Connection failed'));
-                }
+        if (this.isConnected()) return;
+        return executionWait<void>((resolve, reject) => {
+            const timeoutId = setTimeout(() => reject(new Error('waitForConnection timed out')), timeout);
+            const unsubscribe = this.onConnectionStateChange(state => {
+                if (state === 'connected') resolve();
+                else if (state === 'disconnected') reject(new Error('Connection failed'));
             });
+            return () => { clearTimeout(timeoutId); unsubscribe(); };
         });
     }
 
@@ -817,9 +813,8 @@ export class BotSDK {
         // Private cursor starting "now" — does not consume getNewChat's cursor.
         let cursor = this.chatHistory.seen;
 
-        return new Promise((resolve) => {
+        return executionWait<GameMessage | null>((resolve) => {
             const timeoutId = setTimeout(() => {
-                unsubscribe();
                 resolve(null);
             }, timeout);
 
@@ -828,11 +823,10 @@ export class BotSDK {
                 cursor = this.chatHistory.seen;
                 const match = fresh.find(accepts);
                 if (match) {
-                    clearTimeout(timeoutId);
-                    unsubscribe();
                     resolve(match);
                 }
             });
+            return () => { clearTimeout(timeoutId); unsubscribe(); };
         });
     }
 
@@ -1089,7 +1083,7 @@ export class BotSDK {
         const actionId = `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
         try {
-            return await new Promise<ActionResult>((resolve, reject) => {
+            return await executionWait<ActionResult>((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     this.pendingActions.delete(actionId);
                     reject(new ActionDispatchError(`Action timed out: ${action.type}`, 'timeout'));
@@ -1097,15 +1091,24 @@ export class BotSDK {
 
                 this.pendingActions.set(actionId, { resolve, reject, timeout });
 
-                this.send({
-                    type: 'sdk_action',
-                    username: this.config.botUsername,
-                    actionId,
-                    action,
-                    actionTimeoutMs: this.config.actionTimeout
-                });
+                try {
+                    this.send({
+                        type: 'sdk_action',
+                        username: this.config.botUsername,
+                        actionId,
+                        action,
+                        actionTimeoutMs: this.config.actionTimeout
+                    });
+                } catch (error) {
+                    reject(error);
+                }
+                return () => {
+                    clearTimeout(timeout);
+                    this.pendingActions.delete(actionId);
+                };
             });
         } catch (err) {
+            throwIfExecutionAborted();
             // A dropped dispatch is a reportable failure, not a fatal one: callers
             // check result.success and can retry, reposition, or give up. Losing
             // the connection outright still throws from the guard above.
@@ -1704,7 +1707,7 @@ export class BotSDK {
 
         const screenshotId = `ss-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-        return new Promise((resolve, reject) => {
+        return executionWait<string>((resolve, reject) => {
             const timeoutHandle = setTimeout(() => {
                 this.pendingScreenshots.delete(screenshotId);
                 reject(new Error('Screenshot request timed out'));
@@ -1712,11 +1715,16 @@ export class BotSDK {
 
             this.pendingScreenshots.set(screenshotId, { resolve, reject, timeout: timeoutHandle });
 
-            this.send({
-                type: 'sdk_screenshot_request',
-                username: this.config.botUsername,
-                screenshotId
-            });
+            try {
+                this.send({
+                    type: 'sdk_screenshot_request',
+                    username: this.config.botUsername,
+                    screenshotId
+                });
+            } catch (error) {
+                reject(error);
+            }
+            return () => { clearTimeout(timeoutHandle); this.pendingScreenshots.delete(screenshotId); };
         });
     }
 
@@ -1861,75 +1869,47 @@ export class BotSDK {
         predicate: (state: BotWorldState) => boolean,
         timeout: number = 30000
     ): Promise<BotWorldState> {
-        if (this.state && predicate(this.state)) {
-            return this.state;
-        }
+        if (this.state && predicate(this.state)) return this.state;
+        return this.waitForObservation(predicate, timeout, 'waitForCondition timed out');
+    }
 
-        return new Promise((resolve, reject) => {
-            const timeoutId = setTimeout(() => {
-                unsubscribe();
-                reject(new Error('waitForCondition timed out'));
-            }, timeout);
-
-            const unsubscribe = this.onStateUpdate((state) => {
-                if (predicate(state)) {
-                    clearTimeout(timeoutId);
-                    unsubscribe();
-                    resolve(state);
+    private waitForObservation(
+        predicate: (state: BotWorldState) => boolean,
+        timeout: number,
+        timeoutMessage: string,
+    ): Promise<BotWorldState> {
+        return executionWait<BotWorldState>((resolve, reject) => {
+            const timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeout);
+            const unsubscribe = this.onStateUpdate(state => {
+                try {
+                    if (predicate(state)) resolve(state);
+                } catch (error) {
+                    reject(error);
                 }
             });
+            return () => { clearTimeout(timeoutId); unsubscribe(); };
         });
     }
 
     /** Wait for next state update from server. */
     async waitForStateChange(timeout: number = 30000): Promise<BotWorldState> {
-        return new Promise((resolve, reject) => {
-            const timeoutId = setTimeout(() => {
-                unsubscribe();
-                reject(new Error('waitForStateChange timed out'));
-            }, timeout);
-
-            const unsubscribe = this.onStateUpdate((state) => {
-                clearTimeout(timeoutId);
-                unsubscribe();
-                resolve(state);
-            });
-        });
+        return this.waitForObservation(() => true, timeout, 'waitForStateChange timed out');
     }
 
     /**
      * Wait for a specific number of server ticks (~300ms each).
-     *
      * @param ticks - Number of server ticks to wait
      * @returns The state after waiting
      */
     async waitForTicks(ticks: number = 1): Promise<BotWorldState> {
-        if (!this.state) {
-            throw new Error('waitForTicks: no state available');
-        }
-
-        if (ticks <= 0) {
-            return this.state;
-        }
-
-        const startTick = this.state.tick;
-        const targetTick = startTick + ticks;
-
-        return new Promise((resolve, reject) => {
-            // Safety timeout: ticks * 1s + 5s buffer (server tick is ~300ms, so 1s is generous)
-            const safetyTimeout = setTimeout(() => {
-                unsubscribe();
-                reject(new Error(`waitForTicks(${ticks}) safety timeout - no state updates received`));
-            }, ticks * 1000 + 5000);
-
-            const unsubscribe = this.onStateUpdate((state) => {
-                if (state.tick >= targetTick) {
-                    clearTimeout(safetyTimeout);
-                    unsubscribe();
-                    resolve(state);
-                }
-            });
-        });
+        if (!this.state) throw new Error('waitForTicks: no state available');
+        if (ticks <= 0) return this.state;
+        const targetTick = this.state.tick + ticks;
+        return this.waitForObservation(
+            state => state.tick >= targetTick,
+            ticks * 1000 + 5000,
+            `waitForTicks(${ticks}) safety timeout - no state updates received`,
+        );
     }
 
     /**

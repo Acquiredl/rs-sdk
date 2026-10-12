@@ -3,6 +3,7 @@
 
 import { BotSDK, deriveGatewayUrl } from './index';
 import { BotActions } from './actions';
+import { executionContext, abortable } from './execution-context';
 import { initPathfinding } from './pathfinding';
 import { formatWorldStateSummary } from './formatter';
 import type { BotWorldState } from './types';
@@ -248,8 +249,8 @@ async function requireLiveClient(sdk: BotSDK, username: string, server: string |
     throw new Error(
         `No game client is attached to "${username}" (${why}).\n` +
         `Scripts drive a running client; they don't start one. Start one, leave it running, then rerun:\n` +
-        `  headless:  cd server/webclient && bun src/lite/runner.ts ${username}\n` +
-        `  browser:   ${origin}/bot?bot=${encodeURIComponent(username)}&password=<PASSWORD from bot.env>`
+        `  browser: ${origin}/bot?bot=${encodeURIComponent(username)}&password=<PASSWORD from bot.env>\n` +
+        `MCP execute_code can open that browser automatically. For fleets of many bots, an optional lite client is available: cd server/webclient && bun src/lite/runner.ts ${username}`
     );
 }
 
@@ -357,6 +358,7 @@ export async function runScript(
     }
 
     // Clean exit on signals - prevents orphaned processes when parent shell is killed
+    const executionController = new AbortController();
     let signalReceived = false;
     const signalCleanup = (signal: string, exitCode: number) => {
         if (signalReceived) {
@@ -364,6 +366,7 @@ export async function runScript(
             process.exit(exitCode);
         }
         signalReceived = true;
+        executionController.abort(new Error(`Script interrupted by ${signal}`));
         console.error(`[Runner] Received ${signal} - disconnecting and exiting...`);
         // Exit 128+signum, never 0: a supervisor must not read a killed run
         // as success. And a wedged disconnect must not hang the process.
@@ -386,26 +389,9 @@ export async function runScript(
 
     try {
         // Set up connection monitoring
-        const scriptPromise = new Promise<any>(async (resolve, reject) => {
-            disconnectReject = reject;
-            try {
-                const scriptResult = await script(ctx);
-                resolve(scriptResult);
-            } catch (e) {
-                reject(e);
-            }
-        });
-
-        // Create race conditions based on options
-        const promises: Promise<any>[] = [scriptPromise];
-
-        // Add timeout if specified
-        if (timeout) {
-            const timeoutPromise = new Promise<never>((_, reject) => {
-                timeoutId = setTimeout(() => reject(new Error(`Script timeout after ${timeout}ms`)), timeout);
-            });
-            promises.push(timeoutPromise);
-        }
+        disconnectReject = err => executionController.abort(err);
+        const scriptPromise = executionContext.run({ signal: executionController.signal }, () => abortable(script(ctx)));
+        if (timeout) timeoutId = setTimeout(() => executionController.abort(new Error(`Script timeout after ${timeout}ms`)), timeout);
 
         // Add connection monitoring if not ignored
         if (onDisconnect !== 'ignore') {
@@ -434,10 +420,11 @@ export async function runScript(
             });
         }
 
-        result = await Promise.race(promises);
+        result = await scriptPromise;
     } catch (e: any) {
         error = e;
     } finally {
+        if (!executionController.signal.aborted) executionController.abort(error ?? new Error('Script finished'));
         // Failures and disconnects must release the deadline too, or a finished
         // run keeps the process alive until its original timeout expires.
         if (timeoutId) clearTimeout(timeoutId);

@@ -755,6 +755,16 @@ export interface ChopTreeResult {
     message: string;
 }
 
+/** One ore observed entering the inventory, with Mining XP as corroboration. */
+export interface MineRockResult {
+    success: boolean;
+    message: string;
+    ore?: InventoryItem;
+    oresMined: number;
+    xpGained: number;
+    reason?: 'loc_not_found' | 'no_matching_option' | 'cant_reach' | 'inventory_full' | 'rejected' | 'timeout';
+}
+
 export interface BurnLogsResult {
     success: boolean;
     xpGained: number;
@@ -920,6 +930,7 @@ export interface UseItemOnNpcResult {
 }
 
 export interface InteractLocResult {
+    /** Activity observed; for mining this can be an animation before ore arrives. Use mineRock for ore completion. */
     success: boolean;
     message: string;
     reason?: 'loc_not_found' | 'no_matching_option' | 'cant_reach' | 'timeout';

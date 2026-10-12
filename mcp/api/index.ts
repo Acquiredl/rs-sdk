@@ -6,8 +6,11 @@ import { BotActions } from '../../sdk/actions';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { withExecutionDeadline, throwIfExecutionAborted } from '../../sdk/execution-context';
 
 export interface BotConnection {
+  /** Folder name as supplied at first connection; lookup is case-insensitive. */
+  name?: string;
   sdk: BotSDK;
   bot: BotActions;
   username: string;
@@ -30,9 +33,10 @@ class BotManager {
    * If password is not provided, loads credentials from bots/{name}/bot.env
    */
   async connect(name: string, password?: string, gatewayUrl?: string): Promise<BotConnection> {
+    const key = name.toLowerCase();
     // Check if already connected
-    if (this.connections.has(name)) {
-      const existing = this.connections.get(name)!;
+    if (this.connections.has(key)) {
+      const existing = this.connections.get(key)!;
       if (existing.connected) {
         return existing;
       }
@@ -86,7 +90,7 @@ class BotManager {
     console.error(`[MCP] Connecting bot "${name}":`);
     console.error(`[MCP]   username: ${username}`);
     console.error(`[MCP]   gateway: ${gateway}`);
-    console.error(`[MCP]   password: ${pwd ? pwd.substring(0, 3) + '...' : 'MISSING'}`);
+    console.error('[MCP]   credentials loaded');
 
     const sdk = new BotSDK({
       botUsername: username,
@@ -106,6 +110,7 @@ class BotManager {
     console.error(`[MCP] Bot "${name}" connected!`);
 
     const connection: BotConnection = {
+      name,
       sdk,
       bot,
       username,
@@ -124,21 +129,18 @@ class BotManager {
       }
     });
 
-    this.connections.set(name, connection);
+    this.connections.set(key, connection);
     return connection;
   }
 
   private async connectWithRetry(sdk: BotSDK, maxAttempts = 3, timeoutMs = 30000): Promise<void> {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        let timeoutId: ReturnType<typeof setTimeout>;
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error(`Connection timed out after ${timeoutMs / 1000}s`)), timeoutMs);
-        });
-
-        await Promise.race([sdk.connect(), timeoutPromise]).finally(() => clearTimeout(timeoutId!));
+        await withExecutionDeadline(timeoutMs, () => sdk.connect(), () => { throw new Error(`Connection timed out after ${timeoutMs / 1000}s`); });
         return; // success
       } catch (err) {
+        await sdk.disconnect().catch(() => {});
+        throwIfExecutionAborted();
         const msg = err instanceof Error ? err.message : String(err);
         if (attempt < maxAttempts) {
           const delay = attempt * 2000; // 2s, 4s backoff
@@ -155,7 +157,7 @@ class BotManager {
    * Disconnect a bot by name
    */
   async disconnect(name: string): Promise<void> {
-    const connection = this.connections.get(name);
+    const connection = this.connections.get(name.toLowerCase());
     if (!connection) {
       throw new Error(`Bot "${name}" is not connected`);
     }
@@ -164,9 +166,9 @@ class BotManager {
     if (connection.unsubscribeConnectionState) {
       connection.unsubscribeConnectionState();
     }
-    connection.sdk.disconnect();
+    await connection.sdk.disconnect();
     connection.connected = false;
-    this.connections.delete(name);
+    this.connections.delete(name.toLowerCase());
     console.error(`[MCP] Bot "${name}" disconnected`);
   }
 
@@ -174,7 +176,7 @@ class BotManager {
    * Get a bot connection by name
    */
   get(name: string): BotConnection | undefined {
-    return this.connections.get(name);
+    return this.connections.get(name.toLowerCase());
   }
 
   /**
@@ -182,7 +184,7 @@ class BotManager {
    */
   list(): Array<{ name: string; username: string; connected: boolean }> {
     return Array.from(this.connections.entries()).map(([name, conn]) => ({
-      name,
+      name: conn.name ?? name,
       username: conn.username,
       connected: conn.connected
     }));
@@ -192,7 +194,7 @@ class BotManager {
    * Check if a bot is connected
    */
   has(name: string): boolean {
-    return this.connections.has(name);
+    return this.connections.has(name.toLowerCase());
   }
 
   private parseEnv(content: string): Record<string, string> {
