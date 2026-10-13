@@ -5,7 +5,6 @@ import Player from '#/engine/entity/Player.js';
 import { NpcStat } from '#/engine/entity/NpcStat.js';
 import { PlayerStat } from '#/engine/entity/PlayerStat.js';
 import World from '#/engine/World.js';
-import { WorldStat } from '#/engine/WorldStat.js';
 import Packet from '#/io/Packet.js';
 import { NpcInfoProt, PlayerInfoProt } from '#/network/rsbuf/prot.js';
 import { Visibility } from '#/network/rsbuf/visibility.js';
@@ -581,12 +580,12 @@ function toInt(value: unknown): number {
     return typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : 0;
 }
 
-// Compression costs tick-thread CPU (~7 ms per MB); skip it when the last tick ran long,
-// the same trade the gateway relay makes.
+// Always compress, even though it costs tick-thread CPU (~7 ms per MB). WebKit drops
+// (1006) a permessage-deflate socket that mixes compressed and uncompressed messages,
+// so the choice can't follow tick time the way the gateway relay's does.
 function send(ws: ServerWebSocket<WebSocketData>, msg: FeedRecord | string): void {
-    const compress = World.lastCycleStats[WorldStat.CYCLE] < World.tickRate * 0.75;
     try {
-        ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg), compress);
+        ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg), true);
     } catch {
         subscribers.delete(ws);
     }
