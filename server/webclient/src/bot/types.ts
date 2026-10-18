@@ -409,6 +409,8 @@ export interface OpFeedbackState {
 
 export interface BotState {
     tick: number;
+    /** Version of nearby-player combat-target telemetry emitted by the Lite client. */
+    combatTargetTelemetryVersion: number;
     /** Monotonic publication cursor; advances for each state sent to agents. */
     revision: number;
     player: PlayerState | null;
