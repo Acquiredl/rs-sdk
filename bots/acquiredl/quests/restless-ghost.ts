@@ -7,8 +7,8 @@
 // server's 25x rate, which lifts combat level: do it early.
 // Usage: bun bots/acquiredl/quests/restless-ghost.ts acquiredl [step]
 import { runScript } from '../../../sdk/runner';
-import { Progress, startRun, endRun, note, talk, travel, climb, has, pos, st, log, pickup, journal, questCompleteSince, closeQuestScroll, markDialogSeen, converse, type Ctx } from './lib';
-import { P } from './places';
+import { Progress, startRun, endRun, note, talk, travel, climb, has, pos, st, log, pickup, journal, questCompleteSince, closeQuestScroll, markDialogSeen, converse, hpGuard, type Ctx } from './lib';
+import { P, towerWestRoom } from './places';
 
 const STEP = process.argv[3] ?? 'auto';
 const AMULET = /^ghostspeak amulet$/i;
@@ -51,16 +51,21 @@ await runScript(async ({ bot, sdk }) => {
         }
     } else if (step === 'skull') {
         if (pos(c).z < 9000) {
-            await travel(c, P.towerLadderDown.x + 1, P.towerLadderDown.z + 1, 2);
-            await climb(c, /^ladder$/i, /^climb-down$/i);
+            await towerWestRoom(c);
+            for (let i = 0; i < 3 && pos(c).z < 9000; i++) await climb(c, /^ladder$/i, /^climb-down$/i);
+            if (pos(c).z < 9000) { endRun(c, r, 'ladder down failed'); return; }
         }
         await travel(c, P.skull.x, P.skull.z + 1, 1);
         const got = await pickup(c, /^skull$/i);
         log(c, `skull: ${got ? 'taken' : 'not taken'} hp=${st(c).player!.hp}`);
         if (got) { p.mark('skull'); ok = true; }
-        // the skeleton (lvl 13) attacks at once: leave by the ladder at (3103, 9576)
+        // the skeleton (lvl 13, 18 HP) attacks at once: leave by the ladder at
+        // (3103, 9576) through the Door (3108, 9570), eating below 8 HP
+        await hpGuard(c, 8, 1);
         await travel(c, 3104, 9575, 1);
-        await climb(c, /^ladder$/i, /^climb-up$/i);
+        await hpGuard(c, 8, 1);
+        for (let i = 0; i < 3 && pos(c).z > 9000; i++) await climb(c, /^ladder$/i, /^climb-up$/i);
+        await hpGuard(c, 8, 1);
     } else if (step === 'finish') {
         await travel(c, P.coffin.x, P.coffin.z, 2);
         await openCoffin(c);

@@ -34,6 +34,7 @@ await runScript(async ({ bot, sdk }) => {
         case 'ashes': ok = await ashes(c, r); break;
         case 'paste': ok = await paste(c, r); break;
         case 'clay': ok = await softClay(c, r); break;
+        case 'bar': ok = await bronzeBar(c, r); break;
         case 'imprint': ok = await imprint(c, r, p); break;
         case 'osman': ok = await osman(c, r, p); break;
         case 'leela': ok = await leela(c, r, p); break;
@@ -137,6 +138,19 @@ async function paste(c: Ctx, r: RunRecord) {
     const t = await talk(c, /^aggie$/i, [/^could you think of a way to make skin paste\?$/i, /^yes please\. mix me some skin paste\.$/i]);
     if (!t.ok) note(c, r, `aggie stopped: ${t.options.join(' | ')}`);
     return has(c, PASTE);
+}
+
+/** Bronze bar: copper ore used on the Lumbridge furnace (3226, 3255) with tin held. Smithing 1 is enough. */
+async function bronzeBar(c: Ctx, r: RunRecord) {
+    if (has(c, /^bronze bar$/i)) return true;
+    if (!has(c, /^copper ore$/i) || !has(c, /^tin ore$/i)) { note(c, r, 'bar needs copper and tin ore'); return false; }
+    await travel(c, 3227, 3254, 2);
+    const furnace = c.sdk.findNearbyLoc(/^furnace$/i);
+    if (!furnace) { note(c, r, 'no furnace in view'); return false; }
+    const u = await c.bot.useItemOnLoc(/^copper ore$/i, furnace);
+    try { await c.sdk.waitForCondition(s => s.inventory.some(i => /^bronze bar$/i.test(i.name)), 10_000); } catch { /* checked */ }
+    note(c, r, `smelt: ${u.message}; bar=${has(c, /^bronze bar$/i)}`);
+    return has(c, /^bronze bar$/i);
 }
 
 /** Soft clay: clay on a jug/bucket of water (the container comes back empty). */

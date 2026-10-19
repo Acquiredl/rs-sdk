@@ -6,7 +6,7 @@
 // Usage: bun bots/acquiredl/quests/rune-mysteries.ts acquiredl [step]
 import { runScript } from '../../../sdk/runner';
 import { Progress, startRun, endRun, note, talk, travel, climb, has, pos, journal, questCompleteSince, closeQuestScroll, type Ctx } from './lib';
-import { P, castleTo } from './places';
+import { P, castleTo, towerWestRoom } from './places';
 
 const STEP = process.argv[3] ?? 'auto';
 
@@ -52,7 +52,7 @@ await runScript(async ({ bot, sdk }) => {
 /** Into the Wizard Tower basement next to Sedridor. */
 export async function toSedridor(c: Ctx) {
     if (pos(c).z > 9000) { await travel(c, P.sedridor.x, P.sedridor.z, 3); return true; }
-    await travel(c, P.towerLadderDown.x + 1, P.towerLadderDown.z + 1, 2);
+    await towerWestRoom(c);
     for (let i = 0; i < 3 && pos(c).z < 9000; i++) await climb(c, /^ladder$/i, /^climb-down$/i);
     if (pos(c).z < 9000) return false;
     await travel(c, P.sedridor.x, P.sedridor.z, 3);

@@ -102,4 +102,17 @@ export async function tollGate(c: Ctx, into: boolean): Promise<boolean> {
     return inside() === into;
 }
 
+/**
+ * Wizard Tower ground floor, west room: the basement ladder (3104, 3162) and
+ * the staircase (3103, 3159) sit behind the diagonal Door (3107, 3162), which
+ * spawns closed. With it shut, interacting with the ladder walks the bot round
+ * the outside of the wall and reports "Nothing happened" (2026-10-19).
+ */
+export async function towerWestRoom(c: Ctx): Promise<void> {
+    if (pos(c).z > 9000 || pos(c).level > 0) return;
+    await travel(c, 3108, 3163, 1);
+    const door = (await c.sdk.scanNearbyLocs(6)).find(l => l.x === 3107 && l.z === 3162 && l.optionsWithIndex.some(o => /^open$/i.test(o.text)));
+    if (door) { const o = await c.bot.openDoor(door); log(c, `tower west door: ${o.success ? 'opened' : o.message}`); }
+}
+
 export { travel, route };

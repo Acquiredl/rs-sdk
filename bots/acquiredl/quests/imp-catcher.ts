@@ -13,7 +13,7 @@
 // Usage: bun bots/acquiredl/quests/imp-catcher.ts acquiredl [start|finish]
 import { runScript } from '../../../sdk/runner';
 import { Progress, startRun, endRun, note, talk, travel, climb, has, pos, st, journal, questCompleteSince, closeQuestScroll, type Ctx } from './lib';
-import { P } from './places';
+import { P, towerWestRoom } from './places';
 
 const STEP = process.argv[3] ?? 'auto';
 const BEADS = [/^black bead$/i, /^red bead$/i, /^white bead$/i, /^yellow bead$/i];
@@ -26,6 +26,9 @@ await runScript(async ({ bot, sdk }) => {
     note(c, r, `beads held: ${BEADS.filter(b => has(c, b)).length}/4`);
     if (step === 'finish' && !BEADS.every(b => has(c, b))) { endRun(c, r, 'not all beads'); return; }
     await toMizgog(c);
+    // NPCs on a new plane take a few ticks to appear in state
+    for (let i = 0; i < 8 && !sdk.findNearbyNpc(/^wizard mizgog$/i); i++) await sdk.waitForTicks(1);
+    if (!sdk.findNearbyNpc(/^wizard mizgog$/i)) note(c, r, `no Mizgog; npcs: ${st(c).nearbyNpcs.map(n => `${n.name}@${n.x},${n.z}`).join(' ')}`);
     const tick0 = st(c).tick;
     const t = await talk(c, /^wizard mizgog$/i, [/^give me a quest!$/i, /^give me a quest please\.$/i]);
     if (t.lines.some(l => /bead/i.test(l))) p.mark('started');
@@ -39,7 +42,7 @@ await runScript(async ({ bot, sdk }) => {
 /** Tower door (3109, 3166) -> diagonal door (3107, 3162) -> Staircase (3103, 3159) up twice. */
 export async function toMizgog(c: Ctx) {
     if (pos(c).z > 9000) { await travel(c, 3104, 9575, 1); await climb(c, /^ladder$/i, /^climb-up$/i); }
-    if (pos(c).level === 0) { await travel(c, 3104, 3160, 1); }
+    if (pos(c).level === 0) { await towerWestRoom(c); await travel(c, 3104, 3160, 1); }
     while (pos(c).level < 2) if (!(await climb(c, /^staircase$/i, /^climb-up$/i))) break;
     await travel(c, 3103, 3162, 2);
 }
