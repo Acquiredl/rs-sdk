@@ -37,3 +37,7 @@ server/engine/data/market.sqlite*
 
 # Dashboard state is live host data, not source.
 /dashboard-max/data/
+
+# Acquiredl fork: my bot files are tracked on the acquiredl branch; the credentials stay out
+!bots/acquiredl/
+bots/acquiredl/bot.env
