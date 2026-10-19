@@ -70,3 +70,13 @@
 - Iron rocks always taken: stay on bronze, or try the SW Varrock iron (3177, 3369), which sits 50 tiles west of the dark wizards.
 - The SE Varrock anvils turn out to be indoors or locked: use the west smithy (3188, 3423) and the west bank.
 - Furnace make-10 breaks on every level-up: re-issue per bar and count the overhead.
+
+### Setup runs
+- `pickpocket.ts` (30 s): 23 attempts on courtyard men, 1 logged success, 17 stuns, 5 server rejections; ended with 6 coins (9 by the next script, so a late success landed after the log line). HP 11 to 8 from stuns. The stun results arrived 0.2 s apart at times, faster than a real stun, so the result probably reads a stale "stunned" message: unverified, noted for later.
+- `buy_hammer.ts`: equipped bronze sword and wooden shield, walked to the Lumbridge General Store, bought a hammer for 1 gp. 8 coins left, inventory 19/28.
+- `route_check.ts`: offline route preview with the SDK's own pathfinder (`findLongPath`), no client needed. The direct Lumbridge to Varrock east bank route (243 tiles) goes through the south gate 14 tiles from the dark wizard spawn, and the anvil-to-furnace leg does too. The east-side chain courtyard, furnace (3229, 3256), (3240, 3290), (3262, 3322), (3271, 3345), mine (3284, 3366), (3290, 3388), (3276, 3425), bank (3254, 3424), anvil (3247, 3405) is 331 tiles and keeps 32+ tiles from the wizards and scorpions, 18 from the bear spawn, 14 from the mugger.
+- `smith_loop.ts`: the main loop, step picked from the inventory (smith if bars, bank if junk and nothing to smelt, smelt if ore and full, else mine). First run (one step: bank the kit) was stopped by the operator after it had walked to (3267, 3334) on the chain. Walked back to the courtyard with `walk_to.ts`.
+
+### Paused for the browser handover
+- the operator is moving the game client from the lite runner to their own browser tab. Rule from here: never start or restart the lite runner; scripts drive whichever client is attached. Bot parked at (3224, 3221), HP 11/11.
+- Next: once `cli.ts` shows state from the browser client, rerun `LOOP_MS=1 bun bots/acquiredl/smith_loop.ts` to bank the kit, then short mining runs to measure ore per minute.
