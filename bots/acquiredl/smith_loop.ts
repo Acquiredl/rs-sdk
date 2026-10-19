@@ -32,7 +32,8 @@ const CHAIN = [
 ] as const;
 type Node = typeof CHAIN[number]['name'];
 
-const KEEP = /^(bronze pickaxe|hammer|coins|shrimps|bread)$/i;
+// Food and coins went to the bank on the iron trips: 26 ore slots, not 23.
+const KEEP = /^(bronze pickaxe|hammer)$/i;
 const ORE_OR_BAR = /(ore|bar)$/i;
 
 class Stop extends Error {}

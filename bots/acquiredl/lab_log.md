@@ -80,3 +80,32 @@
 ### Paused for the browser handover
 - the operator is moving the game client from the lite runner to their own browser tab. Rule from here: never start or restart the lite runner; scripts drive whichever client is attached. Bot parked at (3224, 3221), HP 11/11.
 - Next: once `cli.ts` shows state from the browser client, rerun `LOOP_MS=1 bun bots/acquiredl/smith_loop.ts` to bank the kit, then short mining runs to measure ore per minute.
+
+### Runs on the browser client (from 14:43)
+- the operator's browser tab took over at 14:40 to 14:43. Watch for fresh state, not just any state: for the first two minutes `cli.ts` served the lite client's last state with a STALE warning, which looks like "In Game: true". A two-step walk in the courtyard confirmed scripts drive the browser client.
+- Bank the kit (one step): 377 s to walk the chain courtyard to bank with `bot.walkTo`, 116 s to deposit 14 kinds (about 8 s each). Left: pickaxe, hammer, shrimps, bread, coins.
+- Bronze trip, Mining 1 to 34: 22 ores in about 4.5 min of mining (5.6/min early, 4.4/min later). Most tries came back "rejected" in 1 to 2 s: other players emptying the rocks first. Cheap.
+- Walking fix. `bot.walkTo` stops at every turn point: about 1 s per tile. A test click of 10 tiles took 5.7 s, run flag or not. One `sendWalk` click per chain node runs: mine to furnace 42 s, furnace to anvils 70 s once the anvil door (3248, 3411) is opened explicitly. That door cost about 60 s each way while `walkTo` handled it.
+- Smelting bronze by using copper on the furnace: 11 bars in 125 s (11.4 s a bar), no failures, Smithing 1 to 14.
+- Smithing at the SE Varrock anvils with make-10 (component 1119, option 3): 10 bronze daggers in 28 s, then Smithing 25. Level-up dialogs do not break it.
+- Iron trips, Mining 34 to 55: 2.9, 2.6, 2.7, 1.9, then 1.0 ore a minute as more players crowded the 4 iron rocks. Iron smelting failed exactly half the time: 7 bars from 17 ores by hand, 13 from 26 with the make-10 dialog.
+- Furnace make-10: `bot.interactLoc(furnace, 'Smelt')` reports "Nothing happened", yet the dialog ("Smelt 10 Iron" and so on) opens 2 ticks after a plain `sendInteractLoc`. Clicking by text works. Level-ups break the weak queue: 26 ores went in as batches of 8, 4, 3, 10 and 1, about 5 s an ore with re-opens.
+- The browser client went quiet 5 times for a few seconds ("waitForTicks(1) safety timeout - no state updates received"). The loop now waits for fresh state and redoes the step, up to 3 times a run. Twice it hit the final park; `walk_to.ts` finished it.
+
+### Pivot that mattered: the level curve
+- The plan aimed at 37,224 XP, the OSRS figure for level 40. This engine builds its table with 2^(L/10) where OSRS uses 2^(L/7) (`server/engine/src/engine/entity/Player.ts`, `levelExperience`), so level 40 is 15,789 XP. Every logged level fits that table. Found when Smithing read 39 at 15,767 XP with 13 iron bars still to smith.
+- Result: Smithing 1 to 45 (23,892 XP) in one bronze trip and two iron trips, about 75 min from the handover. Mining 1 to 55 on the way. HP never fell below 8.
+
+### Where things stand
+- Bot parked in the courtyard (3223, 3221), HP 11/11. Inventory: bronze pickaxe, hammer. Worn: bronze sword, wooden shield. Varrock east bank holds the starter kit, food, 8 coins, 11 bronze and 23 iron daggers.
+- `smith_loop.ts` resumes from the inventory. `METAL=iron` with steel unlocked at 30 is open: steel needs coal (Mining 30, have 55) and the nearest coal is not on this chain.
+
+### Next steps
+- Sell the 23 iron daggers for coins (a general store or a weapon shop, watching the overstock rule in `learnings/shops.md`) and buy a better pickaxe: iron mining here is limited by contested rocks, though, not pick speed.
+- Smithing 45 to 50 opens mithril; steel at 30 is open now but needs coal. Both mean a new mine on the chain.
+- `bots/acquiredl/README.md` still says "no run yet". the operator's file: left untouched.
+
+### Possible SDK bugs or improvements
+- `bot.interactLoc(furnace, /smelt/i)` returns "Nothing happened" although the smelting dialog opens 2 ticks later. Workaround: `sendInteractLoc`, wait for a dialog option, `clickDialogByText(/^smelt 10 iron$/i)`.
+- `bot.walkTo` walks turn point to turn point and stops at each: about 1 s a tile on open ground, against about 0.3 s for one click to a point 20 to 40 tiles away.
+- `pickpocketNpc` sometimes returned "stunned" 0.2 s apart, faster than a real stun. Unverified, not filed.
