@@ -175,23 +175,22 @@ await runScript(async ({ bot, sdk }) => {
 
     const oreCount = () => count(/^(copper ore|iron ore)$/i);
 
-    // Furnace Smelt dialog, make-10. smelting.rs2 lays the buttons out per bar
-    // (bronze, iron, silver, steel, ...) as X, 10, 5, 1 in component order.
+    // Furnace Smelt dialog, make-10. bot.interactLoc reports "Nothing happened"
+    // here: the dialog (options "Smelt 10 Iron" etc.) opens 2 ticks after a plain
+    // sendInteractLoc but is not one of the effects it waits for (probe, 2026-10-19).
     // The batch runs on a weak queue; stop when the ore stops going in.
     async function smeltBatch(m: 'bronze' | 'iron'): Promise<number> {
         await bot.dismissBlockingUI();
         const furnace = sdk.findNearbyLoc(/^furnace$/i, { withOption: /smelt/i });
-        if (!furnace) return 0;
-        const r = await bot.interactLoc(furnace, /smelt/i);
-        if (!r.success) { log(`Smelt option: ${r.message}`); return 0; }
-        try { await sdk.waitForCondition(s => s.dialog.isOpen && s.dialog.options.length >= 8, 6_000); }
+        const op = furnace?.optionsWithIndex.find(o => /smelt/i.test(o.text));
+        if (!furnace || !op) return 0;
+        await sdk.sendInteractLoc(furnace.x, furnace.z, furnace.id, op.opIndex);
+        const label = new RegExp(`^smelt 10 ${m}$`, 'i');
+        try { await sdk.waitForCondition(s => s.dialog.isOpen && s.dialog.options.some(o => label.test(o.text)), 8_000); }
         catch { log('smelting dialog did not open'); return 0; }
-        const opts = [...st().dialog.options].sort((a, b) => (a.componentId ?? 0) - (b.componentId ?? 0));
-        const pick = opts[(m === 'iron' ? 1 : 0) * 4 + 1];
-        log(`smelt dialog: ${opts.slice(0, 8).map(o => `${o.index}:${o.text}:${o.componentId}`).join(' | ')}; picking ${pick?.index}:${pick?.text}`);
-        if (!pick || !/10/.test(pick.text)) { await bot.closeInterface(); return 0; }
         const ore0 = oreCount();
-        await sdk.sendClickDialog(pick.index);
+        const c = await sdk.clickDialogByText(label);
+        if (!c.success) { log(`click Smelt 10: ${c.message}`); return 0; }
         let last = ore0, idle = 0;
         while (idle < 8 && last > 0) {
             await sdk.waitForTicks(1);
@@ -301,9 +300,12 @@ await runScript(async ({ bot, sdk }) => {
         const iron = lvl('Smithing') >= 15 ? count(/^iron ore$/i) : 0;
         const junk = inv.filter(i => !KEEP.test(i.name) && !ORE_OR_BAR.test(i.name)).length;
         const full = inv.length >= 28;
-        if (bars > 0) await smithStep();
-        else if (junk > 0 && (full || pairs + iron === 0)) await bankStep();
-        else if (pairs + iron > 0 && (full || nearestIndex() <= 1)) await smeltStep();
+        const atFurnace = nearestIndex() <= 1;
+        const pastBank = nearestIndex() >= CHAIN.findIndex(n => n.name === 'bank');
+        if (pairs + iron > 0 && atFurnace) await smeltStep();
+        else if (bars > 0) await smithStep();
+        else if (junk > 0 && (full || pairs + iron === 0 || pastBank)) await bankStep();
+        else if (pairs + iron > 0 && full) await smeltStep();
         else if (!full) await mineStep();
         else throw new Error(`stuck: full inventory with nothing to smelt or bank (${inv.map(i => i.name).join(', ')})`);
     }
