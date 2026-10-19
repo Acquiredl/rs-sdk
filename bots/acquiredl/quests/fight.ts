@@ -23,6 +23,11 @@ await runScript(async ({ bot, sdk }) => {
     const c: Ctx = { bot, sdk };
     const r = startRun(c, quest, `fight-${npcStr}`);
     const t0 = Date.now();
+    // wield what the pack holds: iteration zero punched its first 16 goblins
+    for (const re of [/(sword|scimitar)$/i, /shield$/i]) {
+        const it = sdk.findInventoryItem(re);
+        if (it) { const e = await bot.equipItem(it); log(c, `wield ${it.name}: ${e.message}`); }
+    }
     const style = st(c).combatStyle?.styles.find(s => s.trainsSkills.includes(STYLE));
     if (style && st(c).combatStyle?.currentStyle !== style.index) { await sdk.sendSetCombatStyle(style.index); await sdk.waitForTicks(1); }
     if (SPOT) await travel(c, SPOT.x, SPOT.z, 3);

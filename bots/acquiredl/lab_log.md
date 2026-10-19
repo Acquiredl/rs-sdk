@@ -202,3 +202,18 @@ Depended on acquiredl's levels: Mining 55 made the clay and tin one click each, 
 ### Where things stand
 - Bot: Draynor Manor lever basement, east room, about (3107, 9766), HP 33/33, combat 36. Not parked: the operator stopped the run here. Levers: A up, B up, C up, D down, E down, F down. To finish Ernest's oil can from this state: `basement.ts acquiredl P:C D:1to2 D:2to3 P:E D:2to3 D:2to5 D:5to8 D:8to9 G:` then out by the ladder (`L:up`) and the secret-room lever (3096, 3357).
 - Inventory: 45 coins, 2 goblin mail, rope, pot of flour, tinderbox, 2 jugs of water, shears, bronze pickaxe, blonde wig, ashes, spade, key, pressure gauge, 3 onions, rubber tube. Worn: bronze sword, Ghostspeak amulet. Bank: burnt meat, 3 onions, hammer, 20 iron and 12 bronze daggers, runes, starter kit.
+
+## Iteration 1 (2026-10-19 evening): Acquiredl1, same 11 quests, fed iteration zero
+
+### Setup
+- Fresh character `Acquiredl1`, made with `bun bots/create-bot.ts Acquiredl1 --hide-chat` (public chat off). Its client is a second browser tab opened by the operator. Its files (bot.env, the template lab log) sit in the git-ignored `bots/Acquiredl1/`; its run log, progress flags and these notes live here, beside the shared scripts.
+- Every quest script takes the bot name as its first argument and keeps per-bot files (`runs-Acquiredl1.jsonl`, `progress-Acquiredl1.json`).
+- Trap found before the first run: `runScript` loads a `bot.env` sitting next to the script before it looks at the bot-name argument, so any script directly in `bots/acquiredl/` drives acquiredl whatever name is passed. Run Acquiredl1 only from `bots/acquiredl/quests/` (no bot.env there). `quests/tutorial.ts` replaces the old `skip_tutorial.ts` for that reason.
+- Changes fed in from iteration zero: `fight.ts` wields the pack's sword and shield first; the shield is kept for training and the store is paid from goblin coins.
+
+### Plan (from the iteration zero feed-forward)
+1. Tutorial skip.
+2. Goblins east of Lumbridge: Defence, Strength, Attack about 16 kills each, imps included for beads.
+3. Store (shears, jug, tinderbox), Cook's Assistant, Sheep Shearer with 7 extra balls, onions.
+4. Restless Ghost start, Duke, Wizard Tower (Sedridor, skull, Mizgog), coffin.
+5. Draynor: Ernest, Ned, Aggie; then Port Sarim, Rimmington, Falador, Goblin Village, Varrock, Al Kharid as in the order sketch.
