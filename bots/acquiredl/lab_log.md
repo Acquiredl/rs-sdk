@@ -16,8 +16,18 @@
 - `runScript` closes its own SDK socket when the script ends. The lite client is unaffected and keeps the character logged in.
 - The lite client wrote its archive cache to `server/webclient/undefined/.cache/` (15 MB). `lite/session.ts:109` defaults cacheDir to `${process.env.HOME}/.cache/rs-sdk-lite`, and Windows shells set USERPROFILE, not HOME. Harmless; the folder shows as untracked, so it must stay out of commits. Workaround: set HOME before starting the runner, or pass cacheDir.
 
+### Woodcutting runs (same day)
+- `woodcut.ts`: walk to the Lumbridge trees at (3195, 3220), chop the nearest reachable tree in a loop. `WOODCUT_MS` sets the length; `WOODCUT_FULL=burn` lights the logs with the tinderbox when the inventory fills and keeps going. Default on full is stop.
+- 30 s run: the walk from the courtyard took 22.6 s, then 2 chops gave 2 logs and 1,250 Woodcutting XP.
+- 2 min run: 9 chops, 9 logs, no failures. Inventory filled at 57 s; burning 10 logs took 59 s (about 6 s per log, 1,000 Firemaking XP each). Woodcutting 1 to 29, Firemaking 1 to 33.
+- XP rates look like 25x OSRS: a regular log gives 625 XP (OSRS 25), burning one gives 1,000 (OSRS 40). Levels come fast, so plan around unlocks rather than grind time.
+- Between the two runs the idle bot was attacked at (3194, 3225): HP 9/10 to 6/11, Attack 1 to 7 (600 XP), HP level 10 to 11, combat level 3 to 5. Auto-retaliate won the fight. Giant rats (lvl 3) roam the tree cluster, and a Bear (lvl 21) stood about 10 tiles from (3185, 3220) at the cluster's west edge. A bear would kill this character. Do not leave the bot idle there; `walk_to.ts` takes it back to the courtyard.
+- A player said "??" in public chat during the run. Chat stays off; no reply.
+- A level-up dialog was open after the run. Every `bot.*` action dismisses it, so the next script picks up fine.
+
 ### Next Steps
-- Pick a first grind. Woodcutting at the Lumbridge trees with the bronze axe is the obvious one; `script.ts` already chops one tree.
+- Keep chopping on the east side of the cluster, away from the bear. Oaks (Varrock, (3190, 3458)) are already unlocked at Woodcutting 29.
+- Decide what to do with logs: burn (current), bank at Lumbridge castle upstairs, or fletch (knife needed).
 - Public chat stays off (SHOW_CHAT=false) until it is turned on as a deliberate experiment.
 
 ### Possible SDK Bugs or Improvements:
