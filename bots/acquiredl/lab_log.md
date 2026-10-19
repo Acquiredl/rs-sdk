@@ -149,3 +149,56 @@
 5. Death 1, Draynor jail: talking to Lady Keli for the key imprint, standing inside the north door. The jail guards (lvl 26, attack at any level) took HP 14 to 0 in about 10 s. Lost at the jail: 42 coins, blonde wig, pink skirt, bronze bar, soft clay, research package, skull, pickaxe, tinderbox, 5 kebabs and more. Kept: Ghostspeak amulet, bronze sword, rope. Death drops last 200 ticks (`^lootdrop_duration`); not recovered.
 6. Death 2, Draynor Manor closet: using the key on the closet door put the bot next to the lvl 25 skeleton, which killed it (HP 14) during the rubber-tube pickup. Lost: spade, pressure gauge, key, bread, shrimps, tools.
 7. Response: combat training before any more danger. 48 goblins east of Lumbridge in three rounds (Defence, then Strength, then Attack) in about 11 minutes: combat 9 to 36 (Attack 33, Strength 31, Defence 31, HP 33) and 56 coins from goblin drops. No goblin mail in 48 kills (3.9% each: a 15% chance of none).
+
+### Stopped by the operator (19:24, 2026-10-19), 3 of 11 quests done
+The operator called the run here, to start a fresh character with what is learned. Hiscores after: Quest Points 7 (stamped at playtime 3h 43m 42s), Overall 266 (stamped at 3h 08m 15s, written when the tab dropped). Before the first quest the page showed Overall 95 at 25m, a stale stamp from the browser handover.
+
+### Per-quest table (local time; from `quests/runs-acquiredl.jsonl` via `runs_table.ts`)
+Ticks are game ticks (about 0.35 s each on this server). "Runs" counts script runs; "not ok" includes runs that worked but whose evidence check missed (noted per quest below).
+
+| Quest | Status at stop | First run | Last run | Script time | Runs (not ok) | Ticks | Coins | Bought / gathered |
+|---|---|---|---|---|---|---|---|---|
+| Cook's Assistant | **done** 17:04 | 16:43 | 17:04 | 7 min | 6 (2) | 1210 | 0 | pot 1, bucket 2 (store); wheat, egg (chicken pen), milk (any cow) |
+| Sheep Shearer | **done** 17:22 | 17:05 | 17:22 | 13 min | 6 (2) | 2600 | +60 | shears 1; 20 wool sheared, spun at the castle |
+| Romeo & Juliet | **done** 18:17 | 17:59 | 18:17 | 11 min | 13 (5) | 2140 | 0 | cadava berries (ground, SE Varrock) |
+| Rune Mysteries | stage 3; package lost in death 1 | 16:46 | 18:24 | 9 min | 4 (2) | 1704 | 0 | none |
+| The Restless Ghost | stage 4; skull lost in death 1 | 16:47 | 18:25 | 7 min | 4 (1) | 1240 | 0 | none |
+| Imp Catcher | started, 0 beads | 18:25 | 18:27 | 2 min | 2 (1) | 355 | 0 | none |
+| Prince Ali Rescue | stage 20; holding blonde wig, rope, flour, ashes, 2 jugs of water | 17:33 | 19:06 | 16 min | 18 (5) | 3196 | -58 | tolls 40, kebabs 6, skirt 2, dye 5 twice; all lost once in death 1 |
+| Ernest the Chicken | stage 2; holding spade, key, gauge, tube; oil can left | 18:35 | 19:22 | 11 min | 17 (7) | 2205 | 0 | none (all in the manor) |
+| Witch's Potion | not started; burnt meat banked | 17:27 | 17:30 | 3 min | 2 (0) | 426 | 0 | raw rat meat (giant rat), burnt on the castle range |
+| Doric's Quest | not started | - | - | - | - | - | - | - |
+| Goblin Diplomacy | not started; 2 goblin mail held | - | - | - | - | - | - | 2 goblin mail from 48 Lumbridge goblins |
+| (prep, banking) | | 16:41 | 19:00 | 5 min | 10 (0) | 873 | +29 | sold the wooden shield (8), bank coins (33) |
+| (combat training) | | 18:46 | 18:57 | 11 min | 3 (0) | 2104 | +56 | 48 goblins: coins and 2 goblin mail |
+
+Where the 2 h 40 min went, roughly: quest steps that worked, about 70 min; recovery from the two deaths (re-buying, re-gathering, re-doing Ernest's first half), about 30 min; the Wilderness walk and back, about 6 min; Juliet's house and the tower ladder door, about 15 min; the lever basement, about 20 min; the client drop, about 5 min. The rest is walking between hubs at about 0.35 to 0.5 s a tile.
+
+Depended on acquiredl's levels: Mining 55 made the clay and tin one click each, Smithing 45 the bronze bar, Firemaking 33 the ashes. A fresh character needs only level 1 for all three, so nothing here blocks iteration one. Everything else started at level 1 here too.
+
+### Post-mortem, quest by quest
+- **Cook's Assistant (7 min of script, could be about 5).** Lost time: the flour bin's first Empty after a hopper run did nothing twice (a retry fixes it), and milking failed four times on a cow other players had killed (target by name, not by index). Fresh character: take the kitchen pot, use the kit bucket; mill first, then the egg and a cow, which sit next to each other east of the river; one Cook visit at the end. Do it first: the reward (Cooking 30) makes cooking food on the castle range safe.
+- **Sheep Shearer (13 min, could be about 7).** Lost time: 15 shears on already-shorn sheep at about 15 s each (fixed: unshorn sheep are npc id 43), and spinning batches that Crafting level-ups break after 1 or 2 balls, with about 18 s to reopen the menu each time. Fresh character: shear and spin 20 for Fred in one round; Prince Ali's 7 extra balls in a second round only when the wig and rope are next.
+- **Romeo & Juliet (11 min, could be about 6).** Lost time: the SDK's static collision seals Juliet's house (both planners say "no path" while a raw click walks out); the way in is the north door (3160, 3440). Fresh character: Juliet first ("I guess I could find him."), Thessalia's pink skirt (2 gp, for Prince Ali) on the way to Romeo, Lawrence, the SE berry patch, the Apothecary twice, Juliet, Romeo.
+- **Rune Mysteries (not finished).** The Duke step took 1 min. The tower's basement ladder sits behind the closed diagonal door (3107, 3162): with it shut the climb fails silently. Fresh character: Duke, Sedridor, Aubury, Sedridor; pair the two tower visits with the skull and with Mizgog.
+- **The Restless Ghost (not finished).** Aereck, Urhney and the ghost took 6 min. The skull trip was clean once the tower door was open (skeleton spawned; the bot left by the ladder at HP 12/13). The skull was then carried around and lost in a death. Fresh character: go straight from the skull to the coffin; the Prayer XP (28,125, about level 47) is worth having before anything dangerous.
+- **Imp Catcher (not finished).** Started only. Beads drop from any imp even before the quest starts, 3.9% per colour: kill every imp met on the way, all session long, rather than one long hunt at the end.
+- **Prince Ali Rescue (not finished).** Two things cost the most: Osman's menu looped (the choice-order bug) and cost a second toll round trip, and death 1 in the jail took every gathered item. Fresh character: gather everything for stages 20 to 30 before talking to Hassan (wool, onions, flour, redberries, ashes, water, clay, bronze bar, skirt, 3 beers, rope); talk to Hassan for free jugs of water while at stage 0; do the Keli imprint only with combat about 30 and food.
+- **Ernest the Chicken (not finished).** Death 2 at the closet skeleton (lvl 25) at combat 9. After training, every part came in one pass except the oil can: the SDK's planners route through the basement's closed puzzle doors and stop short. `basement.ts` (raw interactions, each step verified) works; lever state at the stop: A up, B up, C up, D down, E down, F down, bot in the east room.
+- **Witch's Potion, Doric's Quest, Goblin Diplomacy (not started).** Burnt meat is banked (cook raw rat meat, then use the cooked meat on a range again). Two goblin mail came from the training goblins.
+
+### Feed-forward: what the next character must know on day one
+1. **Train combat before any quest that enters danger.** 48 Lumbridge goblins (lvl 2, max hit 1, east of the castle) took combat 9 to 36 in 11 minutes at 25x XP, Defence first, and paid 56 gp plus 2 goblin mail. Both deaths this session (the Draynor jail guards, lvl 26; the manor closet skeleton, lvl 25) came from skipping this. Wield the sword first: `fight.ts` punched for 16 kills.
+2. **Death keeps 3 items and drops the rest for 200 ticks** where you died, next to whatever killed you. Nothing came back.
+3. **Progress signal:** `quests/journal.ts acquiredl <quest>` screenshots the quest's own journal page (scripts cannot read it; the agent can). Scripts resume from `progress-<bot>.json` flags. Write each flag's evidence check from the server's own lines (`server/content/scripts`), not from a walkthrough: three false "not confirmed" results this session came from guessed wording.
+4. **Read the quest scripts in `server/content/scripts/quests/` and `areas/` before writing a quest.** They hold every option text, item location and stage rule; the four `quest-facts-*.md` side notes summarise them.
+5. **Dialogue choices:** `converse()` clicks the first pattern that matches, so list the closing option first ("Okay, I better go find some things." before "What is the first thing I must do?").
+6. **Walking:** `travel()` runs at about 0.35 to 0.5 s a tile. It refuses basement coordinates from the surface and routes into the Wilderness (one bad climb walked the bot 800 tiles north). Known collision traps: Juliet's house (static map wrong; enter by the north door), the Wizard Tower's diagonal door (3107, 3162), the Draynor Manor front door (one way; use the back door at (3123, 3360)), the lever basement (planners fail; use raw interactions).
+7. **Money:** sell the starter wooden shield on day one (8 gp); goblins drop coins; Doric pays 180 and Ernest 300. Prices: pot 1, jug 1, bucket 2, shears 1, tinderbox 1 (Lumbridge store); bronze pickaxe 1 (Bob's Axes); pink skirt 2 (Thessalia); kebab 1 (Al Kharid); dyes 5 (Aggie); toll 10 each way until Prince Ali stage 100.
+8. **Free items:** a pot on the castle kitchen floor; the kitchen sink fills jugs; Hassan gives a jug of water per talk at stage 0; logs beside Aggie's house burn to ashes; Barbarian Village has 3 beers on the ground; cadava berries and redberries lie SE of Varrock (about 60 s respawn).
+9. **Mining:** every rock is named "Rocks": pick by loc id (clay 2108/2109, copper 2090/2091, tin 2094/2095, iron 2092/2093). Rimmington mine has all four.
+10. **Order sketch for iteration one:** shield sale and store; Cook's; goblin training (Defence, Strength, Attack to about 30); Sheep (+7 extra balls); Restless Ghost start; Duke; Wizard Tower (Sedridor, skull, Mizgog); coffin; Ernest; Draynor (Ned, Aggie) and Port Sarim (bartender, Betty, Wydin); Rimmington (Hetty, rat, Doric's ores, clay, copper, tin); Falador (Wyson, furnace, Doric); Goblin Village; Varrock (Aubury, skirt, berries, Juliet); Prince Ali's Al Kharid trips; imps whenever seen.
+
+### Where things stand
+- Bot: Draynor Manor lever basement, east room, about (3107, 9766), HP 33/33, combat 36. Not parked: the operator stopped the run here. Levers: A up, B up, C up, D down, E down, F down. To finish Ernest's oil can from this state: `basement.ts acquiredl P:C D:1to2 D:2to3 P:E D:2to3 D:2to5 D:5to8 D:8to9 G:` then out by the ladder (`L:up`) and the secret-room lever (3096, 3357).
+- Inventory: 45 coins, 2 goblin mail, rope, pot of flour, tinderbox, 2 jugs of water, shears, bronze pickaxe, blonde wig, ashes, spade, key, pressure gauge, 3 onions, rubber tube. Worn: bronze sword, Ghostspeak amulet. Bank: burnt meat, 3 onions, hammer, 20 iron and 12 bronze daggers, runes, starter kit.

@@ -187,24 +187,70 @@ async function leave(c: Ctx) {
     await walkPts(c, [[3123, 3362], [3128, 3362], [3128, 3352]]);
 }
 
-// Lever basement, from the server's door rules (BFS solution, side notes).
-async function lever(c: Ctx, x: number, z: number) {
-    const l = (await c.sdk.scanNearbyLocs(12)).find(v => v.x === x && v.z === z && /lever/i.test(v.name));
-    if (!l) { log(c, `no lever at (${x}, ${z})`); return; }
-    const o = await c.bot.interactLoc(l, /^pull$/i);
-    await c.sdk.waitForTicks(2);
-    await converse(c, []);
-    log(c, `lever (${x}, ${z}): ${o.message}`);
+// Lever basement (server quest_haunted.rs2: each Door checks %ernestlever bits,
+// A=0 .. F=5, 1 = down; a pull toggles and prints "You pull lever X down/up";
+// climbing the puzzle ladder up resets every lever to up). Rooms: start S (7+8,
+// levers A B, ladder), east E (1+4, levers C D), middle M (5), top T (2),
+// north-west W (3, levers E F), west V (6), oil can O (9).
+// The SDK's planners route through the puzzle's closed doors and stop short
+// ("I can't reach that!", first try 2026-10-19), so everything here is a raw
+// sendInteractLoc: the server routes inside a room correctly.
+const LEVERS: Record<string, [number, number]> = { A: [3108, 9745], B: [3118, 9752], C: [3112, 9760], D: [3108, 9767], E: [3097, 9767], F: [3096, 9765] };
+const DOORS: Record<string, [number, number]> = {
+    '1to2': [3105, 9765], '2to3': [3100, 9765], '4to5': [3105, 9760], '5to6': [3100, 9760], '8to9': [3100, 9755],
+    '2to5': [3102, 9763], '3to6': [3097, 9763], '4to7': [3108, 9758], '5to8': [3102, 9758],
+};
+// BFS over the door rules from all levers up, standing in S (same as the side-notes solution)
+const PLAN: [string, string][] = [
+    ['lever', 'A'], ['lever', 'B'], ['door', '4to7'], ['lever', 'D'], ['door', '4to5'], ['door', '5to8'],
+    ['lever', 'A'], ['lever', 'B'], ['door', '5to8'], ['door', '5to6'], ['door', '3to6'],
+    ['lever', 'E'], ['lever', 'F'], ['door', '2to3'], ['door', '1to2'], ['lever', 'C'],
+    ['door', '1to2'], ['door', '2to3'], ['lever', 'E'], ['door', '2to3'], ['door', '2to5'], ['door', '5to8'],
+    ['door', '8to9'],
+];
+
+async function rawLoc(c: Ctx, x: number, z: number, name: RegExp, op: RegExp): Promise<boolean> {
+    const l = (await c.sdk.scanNearbyLocs(15)).find(v => v.x === x && v.z === z && name.test(v.name));
+    const o = l?.optionsWithIndex.find(v => op.test(v.text));
+    if (!l || !o) { log(c, `no ${name} with ${op} at (${x}, ${z})`); return false; }
+    await c.sdk.sendInteractLoc(l.x, l.z, l.id, o.opIndex);
+    return true;
 }
-async function bdoor(c: Ctx, x: number, z: number) {
-    const d = (await c.sdk.scanNearbyLocs(12)).find(v => v.x === x && v.z === z && /door/i.test(v.name));
-    if (!d) { log(c, `no basement door at (${x}, ${z})`); return; }
-    const before = `${pos(c).x},${pos(c).z}`;
-    const o = await c.bot.interactLoc(d, /^open$/i);
-    await c.sdk.waitForTicks(3);
-    await converse(c, []);
-    log(c, `door (${x}, ${z}): ${o.message}; ${before} -> ${pos(c).x},${pos(c).z}`);
+const lastMsgTick = (c: Ctx) => Math.max(0, ...st(c).gameMessages.map(m => m.tick));
+async function waitMsg(c: Ctx, re: RegExp, after: number, ticks = 15): Promise<string | null> {
+    for (let i = 0; i < ticks; i++) {
+        const m = st(c).gameMessages.find(g => g.tick > after && re.test(g.text));
+        if (m) return m.text;
+        await c.sdk.waitForTicks(1);
+    }
+    return null;
 }
+async function pull(c: Ctx, k: string): Promise<boolean> {
+    const t0 = lastMsgTick(c);
+    if (!(await rawLoc(c, LEVERS[k][0], LEVERS[k][1], /lever/i, /^pull$/i))) return false;
+    const m = await waitMsg(c, /you pull lever|can't reach/i, t0);
+    log(c, `lever ${k}: ${m ?? 'no message'}`);
+    return !!m && /you pull lever/i.test(m);
+}
+async function through(c: Ctx, k: string): Promise<boolean> {
+    const t0 = lastMsgTick(c), p0 = pos(c);
+    if (!(await rawLoc(c, DOORS[k][0], DOORS[k][1], /^door$/i, /^open$/i))) return false;
+    for (let i = 0; i < 15; i++) {
+        await c.sdk.waitForTicks(1);
+        const locked = st(c).gameMessages.find(g => g.tick > t0 && /door is locked|can't reach/i.test(g.text));
+        if (locked) { log(c, `door ${k}: ${locked.text}`); return false; }
+        const p = pos(c);
+        // crossed: now on the far side of the door tile
+        const [dx, dz] = DOORS[k];
+        if ((p0.x - dx) * (p.x - dx) < 0 || (p0.z - dz) * (p.z - dz) < 0 || (Math.abs(p.x - p0.x) + Math.abs(p.z - p0.z) >= 2 && i > 3)) {
+            log(c, `door ${k}: (${p0.x}, ${p0.z}) -> (${p.x}, ${p.z})`);
+            return true;
+        }
+    }
+    log(c, `door ${k}: no crossing seen, at (${pos(c).x}, ${pos(c).z})`);
+    return false;
+}
+
 async function oilcan(c: Ctx): Promise<boolean> {
     if (has(c, /^oil can$/i)) return true;
     if (pos(c).z < 9000) {
@@ -218,27 +264,28 @@ async function oilcan(c: Ctx): Promise<boolean> {
         log(c, `bookcase: now (${pos(c).x}, ${pos(c).z})`);
         await climb(c, /^ladder$/i, /^climb-down$/i);
         if (pos(c).z < 9000) return false;
+    } else {
+        // already below with unknown lever state: up the puzzle ladder (resets all levers) and back down
+        await c.sdk.sendWalk(3116, 9755, true); await c.sdk.waitForTicks(8);
+        await climb(c, /^ladder$/i, /^climb-up$/i);
+        await climb(c, /^ladder$/i, /^climb-down$/i);
+        if (pos(c).z < 9000) return false;
     }
-    // A (3108, 9745) B (3118, 9752) C (3112, 9760) D (3108, 9767) E (3097, 9767) F (3096, 9765)
-    await lever(c, 3108, 9745); await lever(c, 3118, 9752);        // A down, B down
-    await bdoor(c, 3108, 9758); await lever(c, 3108, 9767);        // east room, D down
-    await bdoor(c, 3105, 9760); await bdoor(c, 3102, 9758);        // centre, back to start
-    await lever(c, 3108, 9745); await lever(c, 3118, 9752);        // A up, B up
-    await bdoor(c, 3102, 9758); await bdoor(c, 3100, 9760); await bdoor(c, 3097, 9763); // to NW room
-    await lever(c, 3097, 9767); await lever(c, 3096, 9765);        // E down, F down
-    await bdoor(c, 3100, 9765); await bdoor(c, 3105, 9765);        // to east room
-    await lever(c, 3112, 9760);                                     // C down
-    await bdoor(c, 3105, 9765); await bdoor(c, 3100, 9765);        // to NW room
-    await lever(c, 3097, 9767);                                     // E up
-    await bdoor(c, 3100, 9765); await bdoor(c, 3102, 9763); await bdoor(c, 3102, 9758); // to start
-    await bdoor(c, 3100, 9755);                                     // SW room
+    log(c, `basement start (${pos(c).x}, ${pos(c).z})`);
+    for (const [kind, k] of PLAN) {
+        const ok = kind === 'lever' ? await pull(c, k) : await through(c, k);
+        if (!ok) { log(c, `plan stopped at ${kind} ${k}`); return false; }
+    }
     const got = await pickup(c, /^oil can$/i);
-    await bdoor(c, 3100, 9755);
-    await walkInto(c, 3117, 9755, 1);
-    await climb(c, /^ladder$/i, /^climb-up$/i);
-    const lv = (await c.sdk.scanNearbyLocs(5)).find(l => /lever/i.test(l.name));
-    if (lv) { await c.bot.interactLoc(lv, /^pull$/i); await c.sdk.waitForTicks(3); }
-    log(c, `out of the secret room: (${pos(c).x}, ${pos(c).z})`);
+    log(c, `oil can: ${got}`);
+    // out: back through 8to9 (E up, F down still holds), up the puzzle ladder
+    // (3117, 9754) to the secret room, then Pull its lever (3096, 3357)
+    if (got && (await through(c, '8to9'))) {
+        await c.sdk.sendWalk(3116, 9755, true); await c.sdk.waitForTicks(10);
+        await climb(c, /^ladder$/i, /^climb-up$/i);
+        if (await rawLoc(c, 3096, 3357, /lever/i, /^pull$/i)) await c.sdk.waitForTicks(4);
+        log(c, `left the secret room: (${pos(c).x}, ${pos(c).z})`);
+    }
     return got;
 }
 
