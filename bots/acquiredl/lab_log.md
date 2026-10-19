@@ -109,3 +109,34 @@
 - `bot.interactLoc(furnace, /smelt/i)` returns "Nothing happened" although the smelting dialog opens 2 ticks later. Workaround: `sendInteractLoc`, wait for a dialog option, `clickDialogByText(/^smelt 10 iron$/i)`.
 - `bot.walkTo` walks turn point to turn point and stops at each: about 1 s a tile on open ground, against about 0.3 s for one click to a point 20 to 40 tiles away.
 - `pickpocketNpc` sometimes returned "stunned" 0.2 s apart, faster than a real stun. Unverified, not filed.
+
+## Session 3 (2026-10-19 evening): 11 quests, iteration zero
+
+### Goal
+- Complete Cook's Assistant, Sheep Shearer, Romeo & Juliet, Rune Mysteries, Doric's Quest, Goblin Diplomacy, Witch's Potion, The Restless Ghost, Ernest the Chicken, Prince Ali Rescue and Imp Catcher, and leave scripts a fresh character can run faster. Start: courtyard (3222, 3219), HP 11/11, combat 5, 0 coins, inventory sword, shield, pickaxe, hammer.
+- Hiscores before the first quest (https://rs-sdk-demo.fly.dev/hiscores/player/acquiredl): Overall 95, time 25m, Quest Points "-". That 25m is stale: the server writes skills and overall playtime only at logout (the lite runner's logout before the browser handover). Quest points refresh on the 15-minute autosave (`LoginServer.ts` `updateQuestHiscore`), with playtime stamped when the total changes.
+
+### Tracking method: the quest journal, read from a screenshot
+- What works with the least code: click the quest's button in the quest tab with `sdk.sendClickComponent(id)`. The server's `[if_button,questlist:<quest>]` script writes the journal page and opens it as modal 8134 (`questjournal_scroll`). `sdk.sendScreenshot()` then returns the game canvas, page included. `quests/lib.ts` `journal()` does click, wait for modal 8134, screenshot to a PNG in the temp folder, close: about 10 lines. `quests/journal.ts acquiredl cook sheep ...` (or `all`) runs it from the shell.
+- Button ids (`server/content/pack/interface.pack`): cook 7333, runemysteries 7335, doric 7336, priest (Restless Ghost) 7337, gobdip 7338, haunted (Ernest) 7339, imp 7340, prince 7342, romeojuliet 7343, sheep 7344, hetty (Witch's Potion) 7348.
+- What it gives: the game's own step text, the same function of the stage varp and the inventory that a player reads. Example, Cook's at stage 0: "I can start this quest by speaking to the Cook in the Kitchen on the ground floor of Lumbridge Castle"; after the hand-in, the whole text struck through and "QUEST COMPLETE!".
+- What it cannot tell you:
+  - Scripts cannot read it. World state carries no modal text: `state.interface` lists clickable options only (the journal has one, "Close Window"), and `recentDialogs` covers the chat box, not modals. Only a reader of the PNG (the agent) sees the text.
+  - No varps in world state either, so the stage number itself is never visible.
+  - Items in the bank do not count; the journal strikes an item only when it is in the inventory.
+  - The screenshot also shows the chat box with other players' lines. Ruling (2): never read those into a decision. The PNGs stay in the temp folder, never in git.
+  - It needs a live client: the operator's tab, not an offline check.
+- What scripts use instead, layered on top: per-bot step flags in `quests/progress-<bot>.json`, each set only on observed evidence (an NPC line matched in `recentDialogs`, an item appearing, a game message), and the server's "Congratulations! Quest complete!" game message for done (`questCompleteSince()`), plus the reward scroll (modal 297). Every quest script screenshots the journal at the end of each run, so each step leaves one PNG of the game's own view.
+- External check: quest points on the hiscores page, at most 15 minutes behind.
+
+### Facts that changed the plan (all read from `server/content`, notes in the session's side-notes folder)
+- Quest XP is 25x too: Cook's gives 7,500 Cooking XP (Cooking 30 from 1), Restless Ghost 28,125 Prayer XP (Prayer about 47, so combat level jumps), Sheep 3,750 Crafting.
+- Aggression rule (`Npc.ts`): an NPC with a huntmode attacks when the player's combat level is at most twice its own. At combat 5, every level-3+ hunter attacks.
+- No bank in Lumbridge; no dairy cow (any Cow gives milk); the Restless ghost appears only when the coffin is opened or searched; the skull is a floor item in the Wizard Tower basement and taking it spawns a lvl 13 skeleton.
+- Goblin Diplomacy must start with the Port Sarim bartender; goblin mail only drops (7.8% village goblins, 3.9% others). Imp beads drop 3.9% each colour (about 53 kills for all four). Rat's tail only drops after Witch's Potion starts.
+- Prince Ali: Hassan gives a free Jug of water per talk at stage 0; the key imprint works only at stage exactly 20; Joe needs all 3 beers at once; Keli respawns about 60 s after being tied.
+- Mining rocks are all named "Rocks". Rimmington mine holds clay, copper, tin and iron together, the only place near here with all four.
+
+### Helpers (`bots/acquiredl/quests/`)
+- `lib.ts`: `journal()`, `Progress` flags, `startRun`/`endRun` (one JSON line per run in `runs-<bot>.jsonl`), `converse()` (walks a dialogue, clicking the first matching choice pattern per page, printing every line), `talk()`, `travel()` (plans with `findLongPath`, clicks a point up to 22 tiles ahead, opens closed doors on each leg, about 0.33 s a tile against about 1 s for `bot.walkTo`), `climb()`, `pickup()`, `buy()`, `park()`.
+- `places.ts`: named spots, `castleTo(level)`, `tollGate()`. `fight.ts`, `gather.ts`, `buy.ts`, `go.ts`, `shop_peek.ts`, `runs_table.ts` (prints the per-quest table from the run log).

@@ -3,7 +3,7 @@
 // unless a `level` is given. Dangers are the NPCs that attack a combat-5 bot
 // (an NPC with a huntmode attacks when the player's combat level is at most
 // twice its own).
-import { travel, route, climb, pos, log, type Ctx } from './lib';
+import { travel, route, climb, pos, log, converse, markDialogSeen, type Ctx } from './lib';
 
 export const P = {
     courtyard: { x: 3222, z: 3219 },
@@ -25,6 +25,15 @@ export const P = {
     cows: { x: 3244, z: 3289 },             // any "Cow" gives milk; there is no dairy cow
     onionsLumbridge: { x: 3189, z: 3267 },  // "Onion" locs x 3188-3191, z 3266-3268, gate (3186, 3268)
     alKharidGate: { x: 3267, z: 3228 },
+    // Al Kharid (Al-Kharid warriors in the palace are passive)
+    hassan: { x: 3301, z: 3164 },           // inside the palace; Large doors (3292-93, 3167), (3298, 3171-72)
+    osman: { x: 3286, z: 3180 },            // outside the palace, to the NW
+    kebabSeller: { x: 3273, z: 3180 },      // "Kebab seller": 1 gp, "Yes please."
+    // Draynor village (Prince Ali)
+    ned: { x: 3100, z: 3257 },              // door (3101, 3258)
+    leela: { x: 3113, z: 3263 },
+    jailNorth: { x: 3123, z: 3244 },        // inside the jail, north of the Prison Door (3123, 3243); jail door (3128, 3246)
+    logsByAggie: { x: 3089, z: 3265 },      // ground "Logs" (3089, 3265) and (3089, 3266)
     // Draynor and the Wizard Tower
     draynorBank: { x: 3092, z: 3245 },      // dark wizards (lvl 7) at (3084-3085, 3236-3238): stay at z >= 3246
     aggie: { x: 3086, z: 3259 },            // doors (3088, 3258), (3092, 3255)
@@ -71,5 +80,26 @@ export const LUMBRIDGE_TO_VARROCK_EAST: [number, number][] = [
 export const LUMBRIDGE_TO_DRAYNOR: [number, number][] = [
     [3200, 3247], [3150, 3250], [3105, 3250],
 ];
+
+/**
+ * Cross the Al Kharid toll gate (10 gp each way; free from Prince Ali stage
+ * 100). Open the gate next to a Border Guard, answer "Yes, ok.", and the
+ * server moves the player through. `into` = true heads east into Al Kharid.
+ */
+export async function tollGate(c: Ctx, into: boolean): Promise<boolean> {
+    const inside = () => pos(c).x >= 3268;
+    if (inside() === into) return true;
+    await travel(c, into ? 3267 : 3268 + 1, 3227, 1);
+    for (let attempt = 0; attempt < 3 && inside() !== into; attempt++) {
+        markDialogSeen(c);
+        const gate = c.sdk.findNearbyLoc(/^gate$/i, { withOption: /^open$/i });
+        if (!gate) { log(c, 'toll gate not in view'); return false; }
+        await c.bot.interactLoc(gate, /^open$/i);
+        await converse(c, [/^yes, ok\.$/i]);
+        try { await c.sdk.waitForCondition(() => inside() === into, 6_000); } catch { /* retried */ }
+    }
+    log(c, `toll gate: ${inside() === into ? 'through' : 'NOT through'} at ${pos(c).x}, ${pos(c).z}`);
+    return inside() === into;
+}
 
 export { travel, route };
