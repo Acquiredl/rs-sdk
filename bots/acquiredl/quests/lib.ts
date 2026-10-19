@@ -277,6 +277,12 @@ export async function travel(c: Ctx, x: number, z: number, tol = 2, opts: { maxL
     const t0 = Date.now(), from = pos(c);
     let stalls = 0;
     await c.bot.dismissBlockingUI();
+    // Basements sit at z + 6400 on plane 0. A surface-to-basement target is a
+    // failed climb, not a walk: on 2026-10-19 the planner answered one with a
+    // route north and the bot walked 800 tiles into the Wilderness.
+    if (Math.abs(from.z - z) > 2000) { log(c, `travel: refusing (${x}, ${z}) from ${where(c)}: different layer, climb first`); return false; }
+    // Never plan into the Wilderness (z >= 3520 west of x 3400) unless asked to.
+    if (z >= 3520 && z < 4500 && !process.env.ALLOW_WILDERNESS) { log(c, `travel: refusing (${x}, ${z}): Wilderness`); return false; }
     while (Date.now() < deadline) {
         const p = pos(c);
         if (cheb(p, { x, z }) <= tol) {
@@ -284,7 +290,21 @@ export async function travel(c: Ctx, x: number, z: number, tol = 2, opts: { maxL
             return true;
         }
         const wps = findLongPath(p.level, p.x, p.z, x, z, 500);
-        if (wps.length === 0) { log(c, `travel: no path from ${where(c)} to (${x}, ${z})`); return false; }
+        if (wps.length === 0) {
+            // The SDK's static collision is wrong in places (Juliet's house, Varrock:
+            // both findLongPath and walkTo report no path while the client walks
+            // straight out). First a raw click toward the target, which the client
+            // routes on live collision; then walkInto, which opens doors.
+            const dx = x - p.x, dz = z - p.z, k = Math.min(1, 25 / Math.max(Math.abs(dx), Math.abs(dz), 1));
+            const sx = p.x + Math.round(dx * k), sz = p.z + Math.round(dz * k);
+            log(c, `travel: no planned path from ${where(c)} to (${x}, ${z}); raw click (${sx}, ${sz})`);
+            await c.sdk.sendWalk(sx, sz, true);
+            let last = `${p.x},${p.z}`, still = 0;
+            while (still < 3) { await c.sdk.waitForTicks(1); const q = pos(c); const kq = `${q.x},${q.z}`; if (kq === last) still++; else { still = 0; last = kq; } }
+            if (cheb(pos(c), p) >= 3) continue;
+            if (!(await walkInto(c, x, z, Math.max(tol, 1)))) return false;
+            continue;
+        }
         // expand turn points into tiles, take up to maxLeg tiles
         const tiles: { x: number; z: number; level: number }[] = [];
         let cx = p.x, cz = p.z;
@@ -294,6 +314,9 @@ export async function travel(c: Ctx, x: number, z: number, tol = 2, opts: { maxL
                 tiles.push({ x: cx, z: cz, level: p.level });
             }
             if (tiles.length >= maxLeg) break;
+        }
+        if (p.z < 3520 && tiles.some(t => t.z >= 3520 && t.z < 4500) && !process.env.ALLOW_WILDERNESS) {
+            log(c, `travel: path to (${x}, ${z}) enters the Wilderness; stopping`); return false;
         }
         const goal = tiles[tiles.length - 1];
         // doors on this leg: open any that is closed
@@ -327,6 +350,29 @@ export async function travel(c: Ctx, x: number, z: number, tol = 2, opts: { maxL
     }
     log(c, `travel: timed out at ${where(c)}`);
     return false;
+}
+
+/**
+ * Get into a building whose closed doors the planners will not route through
+ * (Juliet's house): walkTo, and when it stops short, open the closed door
+ * nearest the target and try again.
+ */
+export async function walkInto(c: Ctx, x: number, z: number, tol = 1): Promise<boolean> {
+    const tried = new Set<string>();
+    for (let i = 0; i < 6; i++) {
+        if (cheb(pos(c), { x, z }) <= tol) return true;
+        const w = await c.bot.walkTo(x, z, tol, { timeout: 45_000 });
+        if (w.success && cheb(pos(c), { x, z }) <= tol + 1) return true;
+        const doors = (await c.sdk.scanNearbyLocs(15))
+            .filter(l => /door|gate/i.test(l.name) && l.optionsWithIndex.some(o => /^open$/i.test(o.text)) && !tried.has(`${l.x},${l.z}`))
+            .sort((a, b) => cheb(a, { x, z }) - cheb(b, { x, z }));
+        const d = doors[0];
+        if (!d) { log(c, `walkInto (${x}, ${z}): no closed door left to try`); return false; }
+        tried.add(`${d.x},${d.z}`);
+        const o = await c.bot.openDoor(d);
+        log(c, `walkInto: door (${d.x}, ${d.z}) ${o.success ? 'opened' : o.message}`);
+    }
+    return cheb(pos(c), { x, z }) <= tol;
 }
 
 /** Walk a list of points in order (for routes that must avoid something). */

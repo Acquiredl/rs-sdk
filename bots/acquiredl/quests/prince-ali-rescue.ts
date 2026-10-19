@@ -47,16 +47,20 @@ await runScript(async ({ bot, sdk }) => {
 
 async function start(c: Ctx, r: RunRecord, p: Progress) {
     if (!(await tollGate(c, true))) { note(c, r, 'toll gate failed'); return false; }
-    await travel(c, P.hassan.x, P.hassan.z, 3);
-    // stage 0 only: "It's just too hot here..." gives a free Jug of water each time
-    for (let i = 0; i < 2 && !p.has('started'); i++) {
-        const t = await talk(c, /^hassan$/i, [/^it's just too hot here\. how can you stand it\?$/i]);
-        log(c, `jugs of water: ${count(c, /^jug of water$/i)} (${t.picked.join(' / ')})`);
+    if (!p.has('started')) {
+        await travel(c, P.hassan.x, P.hassan.z, 3);
+        // stage 0 only: "It's just too hot here..." gives a free Jug of water each time
+        for (let i = 0; i < 2; i++) {
+            const t = await talk(c, /^hassan$/i, [/^it's just too hot here\. how can you stand it\?$/i]);
+            log(c, `jugs of water: ${count(c, /^jug of water$/i)} (${t.picked.join(' / ')})`);
+        }
+        const t = await talk(c, /^hassan$/i, [/^can i help you\? you must need some help here in the desert\.$/i]);
+        if (t.lines.some(l => /osman/i.test(l))) p.mark('started');
     }
-    const t = await talk(c, /^hassan$/i, [/^can i help you\? you must need some help here in the desert\.$/i]);
-    if (t.lines.some(l => /osman/i.test(l))) p.mark('started');
     await travel(c, P.osman.x, P.osman.z, 3);
-    const o = await talk(c, /^osman$/i, [/^what is the first thing i must do\?$/i, /^what is the second thing you need\?$/i, /^okay, i better go find some things\.$/i]);
+    // converse() clicks the FIRST pattern that matches an option: the closing option goes first,
+    // or the menu loops first/second forever (2026-10-19, run 2)
+    const o = await talk(c, /^osman$/i, [/^okay, i better go find some things\.$/i, /^what is the first thing i must do\?$/i, /^what is the second thing you need\?$/i]);
     if (o.picked.some(x => /okay, i better go find some things/i.test(x))) p.mark('osman');
     await kebabs(c, r);
     await tollGate(c, false);

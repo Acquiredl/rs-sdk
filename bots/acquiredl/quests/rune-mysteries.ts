@@ -29,7 +29,7 @@ await runScript(async ({ bot, sdk }) => {
         if (!t.ok) note(c, r, `dialogue stopped: ${t.options.join(' | ')}`);
         await castleTo(c, 0);
     } else if (step === 'sedridor' || step === 'finish') {
-        await toSedridor(c);
+        if (!(await toSedridor(c))) { endRun(c, r, 'ladder down failed'); return; }
         const tick0 = sdk.getState()!.tick;
         const t = await talk(c, /^sedridor$/i, [/^i'm looking for the head wizard\.$/i, /^ok, here you are\.$/i, /^yes, certainly\.$/i], { timeoutMs: 90_000 });
         if (step === 'sedridor' && has(c, /^research package$/i)) { p.mark('package'); ok = true; }
@@ -51,8 +51,10 @@ await runScript(async ({ bot, sdk }) => {
 
 /** Into the Wizard Tower basement next to Sedridor. */
 export async function toSedridor(c: Ctx) {
-    if (pos(c).z > 9000) { await travel(c, P.sedridor.x, P.sedridor.z, 3); return; }
+    if (pos(c).z > 9000) { await travel(c, P.sedridor.x, P.sedridor.z, 3); return true; }
     await travel(c, P.towerLadderDown.x + 1, P.towerLadderDown.z + 1, 2);
-    await climb(c, /^ladder$/i, /^climb-down$/i);
+    for (let i = 0; i < 3 && pos(c).z < 9000; i++) await climb(c, /^ladder$/i, /^climb-down$/i);
+    if (pos(c).z < 9000) return false;
     await travel(c, P.sedridor.x, P.sedridor.z, 3);
+    return true;
 }
