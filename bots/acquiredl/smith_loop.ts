@@ -27,6 +27,7 @@ const CHAIN = [
     { name: 'east1', x: 3290, z: 3388 },
     { name: 'east2', x: 3276, z: 3425 },
     { name: 'bank', x: 3254, z: 3424 },
+    { name: 'anvildoor', x: 3247, z: 3413 },
     { name: 'anvil', x: 3247, z: 3405 },
 ] as const;
 type Node = typeof CHAIN[number]['name'];
@@ -69,6 +70,35 @@ await runScript(async ({ bot, sdk }) => {
         return best;
     }
 
+    // One click per chain node (legs are under 45 tiles, inside the client's
+    // scene). bot.walkTo stops at every turn point and measured about 1 s per
+    // tile against 0.57 s for a plain click; the run flag does nothing here.
+    async function fastWalk(x: number, z: number): Promise<boolean> {
+        const dist = () => { const p = st().player; return Math.max(Math.abs(p.worldX - x), Math.abs(p.worldZ - z)); };
+        for (let click = 0; click < 4; click++) {
+            if (dist() <= 2) return true;
+            const r = await sdk.sendWalk(x, z, true);
+            if (!r.success) return false;
+            let last = pos(), still = 0;
+            while (still < 3) {
+                await sdk.waitForTicks(1);
+                if (dist() <= 2) return true;
+                const now = pos();
+                if (now === last) still++; else { still = 0; last = now; }
+            }
+        }
+        return dist() <= 2;
+    }
+
+    // The anvil building's door (3248, 3411), found with findDoorsAlongPath.
+    // Closed, it turns a click into a walkTo fallback costing about 60 s.
+    async function openAnvilDoor() {
+        const door = st().nearbyLocs.find(l => l.x === 3248 && l.z === 3411 && l.optionsWithIndex.some(o => /^open$/i.test(o.text)));
+        if (!door) return;
+        const r = await bot.openDoor(door);
+        log(`anvil door: ${r.success ? 'opened' : r.message}`);
+    }
+
     async function walkNode(target: Node, checkSafety = true) {
         const ti = CHAIN.findIndex(n => n.name === target);
         let i = nearestIndex();
@@ -79,8 +109,11 @@ await runScript(async ({ bot, sdk }) => {
         while (i !== ti) { i += Math.sign(ti - i); path.push(i); }
         for (const k of path) {
             const n = CHAIN[k];
+            const legT0 = Date.now(), from = st().player;
             for (let attempt = 1; attempt <= 3; attempt++) {
                 if (checkSafety) await safety();
+                if (n.name === 'anvil' || CHAIN[k + 1]?.name === 'anvil' || n.name === 'anvildoor') await openAnvilDoor();
+                if (attempt === 1 && await fastWalk(n.x, n.z)) break;
                 const w = await bot.walkTo(n.x, n.z, 3);
                 const q = st().player;
                 const d = Math.hypot(q.worldX - n.x, q.worldZ - n.z);
@@ -88,6 +121,9 @@ await runScript(async ({ bot, sdk }) => {
                 log(`walk to ${n.name} attempt ${attempt}: ${w.message}, still ${d.toFixed(0)} tiles away at ${pos()}`);
                 if (attempt === 3) throw new Error(`could not reach ${n.name}`);
             }
+            const to = st().player;
+            const tiles = Math.max(Math.abs(to.worldX - from.worldX), Math.abs(to.worldZ - from.worldZ));
+            console.log(`   leg ${n.name}: ~${tiles} tiles (straight) in ${((Date.now() - legT0) / 1000).toFixed(1)}s`);
         }
         log(`at ${target} ${pos()}`);
     }
@@ -101,7 +137,8 @@ await runScript(async ({ bot, sdk }) => {
         await walkNode('bank');
         const o = await bot.openBank();
         if (!o.success) throw new Error(`openBank: ${o.message}`);
-        const names = [...new Set(st().inventory.filter(i => !KEEP.test(i.name) && !ORE_OR_BAR.test(i.name)).map(i => i.name))];
+        const stray = metal() === 'iron' ? /^(copper ore|tin ore)$/i : /^$/;
+        const names = [...new Set(st().inventory.filter(i => !KEEP.test(i.name) && (!ORE_OR_BAR.test(i.name) || stray.test(i.name))).map(i => i.name))];
         for (const name of names) {
             const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const d = await bot.depositItem(new RegExp(`^${esc}$`, 'i'), -1);
@@ -136,10 +173,50 @@ await runScript(async ({ bot, sdk }) => {
         log(`mined ${mined} (${fails} fails) in ${secs.toFixed(0)}s, ${(mined / secs * 60).toFixed(1)}/min; inv=${st().inventory.length}/28`);
     }
 
+    const oreCount = () => count(/^(copper ore|iron ore)$/i);
+
+    // Furnace Smelt dialog, make-10. smelting.rs2 lays the buttons out per bar
+    // (bronze, iron, silver, steel, ...) as X, 10, 5, 1 in component order.
+    // The batch runs on a weak queue; stop when the ore stops going in.
+    async function smeltBatch(m: 'bronze' | 'iron'): Promise<number> {
+        await bot.dismissBlockingUI();
+        const furnace = sdk.findNearbyLoc(/^furnace$/i, { withOption: /smelt/i });
+        if (!furnace) return 0;
+        const r = await bot.interactLoc(furnace, /smelt/i);
+        if (!r.success) { log(`Smelt option: ${r.message}`); return 0; }
+        try { await sdk.waitForCondition(s => s.dialog.isOpen && s.dialog.options.length >= 8, 6_000); }
+        catch { log('smelting dialog did not open'); return 0; }
+        const opts = [...st().dialog.options].sort((a, b) => (a.componentId ?? 0) - (b.componentId ?? 0));
+        const pick = opts[(m === 'iron' ? 1 : 0) * 4 + 1];
+        log(`smelt dialog: ${opts.slice(0, 8).map(o => `${o.index}:${o.text}:${o.componentId}`).join(' | ')}; picking ${pick?.index}:${pick?.text}`);
+        if (!pick || !/10/.test(pick.text)) { await bot.closeInterface(); return 0; }
+        const ore0 = oreCount();
+        await sdk.sendClickDialog(pick.index);
+        let last = ore0, idle = 0;
+        while (idle < 8 && last > 0) {
+            await sdk.waitForTicks(1);
+            const now = oreCount();
+            if (now < last) { last = now; idle = 0; } else idle++;
+        }
+        return ore0 - last;
+    }
+
     async function smeltStep() {
         await walkNode('furnace');
         let ok = 0, failed = 0;
         const s0 = Date.now();
+        const bars0 = count(/ bar$/i), ores0 = oreCount();
+        for (let batch = 0; batch < 6 && oreCount() > 0; batch++) {
+            const m = count(/^iron ore$/i) > 0 && lvl('Smithing') >= 15 ? 'iron' : 'bronze';
+            if (m === 'bronze' && count(/^tin ore$/i) === 0) break;
+            const used = await smeltBatch(m);
+            log(`batch ${batch + 1}: ${used} ore in; bars=${count(/ bar$/i)} smithing=${lvl('Smithing')}`);
+            if (used === 0) break;
+        }
+        if (oreCount() < ores0) {
+            ok = count(/ bar$/i) - bars0; failed = ores0 - oreCount() - ok;
+        }
+        let errors = 0;
         while (Date.now() - t0 < LOOP_MS + 120_000) {
             await safety();
             const m = count(/^iron ore$/i) > 0 && lvl('Smithing') >= 15 ? 'iron' : 'bronze';
@@ -150,11 +227,11 @@ await runScript(async ({ bot, sdk }) => {
             if (!furnace) throw new Error('no furnace with a Smelt option nearby');
             const before = count(/^(copper ore|iron ore)$/i), bars0 = count(/ bar$/i);
             const u = await bot.useItemOnLoc(ore, furnace);
-            if (!u.success) { log(`use ${ore.name} on furnace: ${u.message}`); failed++; if (failed > 5) break; continue; }
+            if (!u.success) { log(`use ${ore.name} on furnace: ${u.message}`); if (++errors > 5) break; continue; }
             try {
                 await sdk.waitForCondition(s => s.inventory.filter(i => /^(copper ore|iron ore)$/i.test(i.name)).reduce((a, i) => a + i.count, 0) < before, 8_000);
-            } catch { log('ore did not go in 8 s'); failed++; if (failed > 5) break; continue; }
-            if (count(/ bar$/i) > bars0) ok++; else failed++;
+            } catch { log('ore did not go in 8 s'); if (++errors > 5) break; continue; }
+            if (count(/ bar$/i) > bars0) ok++; else failed++; // impure iron
         }
         const secs = (Date.now() - s0) / 1000;
         log(`smelted ${ok} bars (${failed} failed or impure) in ${secs.toFixed(0)}s; smithing=${lvl('Smithing')} (${xp('Smithing')})`);
@@ -193,24 +270,42 @@ await runScript(async ({ bot, sdk }) => {
         log(`smith step: ${made} items in ${((Date.now() - s0) / 1000).toFixed(0)}s`);
     }
 
+    // The browser client can go quiet for a few seconds (seen 2026-10-19,
+    // "waitForTicks(1) safety timeout"); wait for fresh state and redo the step.
+    let gaps = 0;
+    async function rideOutGap(e: Error): Promise<boolean> {
+        if (!/no state updates|stale|not connected|disconnect/i.test(e.message) || ++gaps > 3) return false;
+        log(`state gap (${e.message}); waiting for fresh state, gap ${gaps}/3`);
+        for (let i = 0; i < 60; i++) {
+            await new Promise(r => setTimeout(r, 2_000));
+            if (sdk.getStateAge() < 3_000) return true;
+        }
+        return false;
+    }
+
     try {
         let steps = 0;
-        while (Date.now() - t0 < LOOP_MS && steps < 20) {
+        do {
             steps++;
-            const inv = st().inventory;
-            const bars = count(/^(bronze|iron) bar$/i);
-            const pairs = Math.min(count(/^copper ore$/i), count(/^tin ore$/i));
-            const iron = lvl('Smithing') >= 15 ? count(/^iron ore$/i) : 0;
-            const junk = inv.filter(i => !KEEP.test(i.name) && !ORE_OR_BAR.test(i.name)).length;
-            const full = inv.length >= 28;
-            if (bars > 0) await smithStep();
-            else if (junk > 0 && (full || pairs + iron === 0)) await bankStep();
-            else if (pairs + iron > 0 && (full || nearestIndex() <= 1)) await smeltStep();
-            else if (!full) await mineStep();
-            else throw new Error(`stuck: full inventory with nothing to smelt or bank (${inv.map(i => i.name).join(', ')})`);
-        }
+            try { await oneStep(); }
+            catch (e) { if (e instanceof Stop || !(await rideOutGap(e as Error))) throw e; }
+        } while (Date.now() - t0 < LOOP_MS && steps < 20);
     } catch (e) {
         if (!(e instanceof Stop)) console.log(`error: ${(e as Error).message}`);
+    }
+
+    async function oneStep() {
+        const inv = st().inventory;
+        const bars = count(/^(bronze|iron) bar$/i);
+        const pairs = Math.min(count(/^copper ore$/i), count(/^tin ore$/i));
+        const iron = lvl('Smithing') >= 15 ? count(/^iron ore$/i) : 0;
+        const junk = inv.filter(i => !KEEP.test(i.name) && !ORE_OR_BAR.test(i.name)).length;
+        const full = inv.length >= 28;
+        if (bars > 0) await smithStep();
+        else if (junk > 0 && (full || pairs + iron === 0)) await bankStep();
+        else if (pairs + iron > 0 && (full || nearestIndex() <= 1)) await smeltStep();
+        else if (!full) await mineStep();
+        else throw new Error(`stuck: full inventory with nothing to smelt or bank (${inv.map(i => i.name).join(', ')})`);
     }
 
     if (PARK) await walkNode('courtyard', false).catch(e => console.log(`park failed: ${e.message}`));
