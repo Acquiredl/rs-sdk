@@ -1,8 +1,8 @@
 # Guild funnel: example cases
 
 The cases that judge the daemon. The operator owns them. Drafted by Claude on
-2026-10-20 for the operator to edit; nothing here is final until the operator
-has changed or kept each line. Shape per case, from ADR-0001: the task the
+2026-10-20 and kept as drafted by the operator the same day; edits since are the
+operator's. Shape per case, from ADR-0001: the task the
 guildbank set, what the run and the ledger show, the personality cards, then the
 expected execution and the expected report lines. Knob values are the defaults
 from the plan (lag trigger 3 quests or 10 levels, tax 20%, beneficial test 5%
