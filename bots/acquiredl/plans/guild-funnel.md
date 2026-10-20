@@ -1,8 +1,8 @@
 # Guild funnel: a capped guild of bots with a guildbank and a warehouse
 
-Status: plan, drafted 2026-10-19 with the operator. Nothing built. Two ADR-grade
-items wait for the operator to restate them in their own words before any code
-(section 13). Market figures are a snapshot from 2026-10-20 UTC and will have moved.
+Status: plan, drafted 2026-10-19 with the operator. Nothing built. The chain of
+command was ruled on 2026-10-20 (ADR-0001, `bots/acquiredl/adrs/`); one ADR-grade
+item, API versus sessions, still waits for the operator's restatement (section 13). Market figures are a snapshot from 2026-10-20 UTC and will have moved.
 
 ## 1. The question
 
@@ -58,14 +58,17 @@ API rates per million tokens (claude-api reference, cached 2026-10-06):
 Haiku is the lever. Sonnet barely is. Subscription weighting is not published;
 API ratios are the proxy (medium confidence).
 
-The ladder: script retry, then Haiku picks from a menu, then Sonnet changes a
-parameter or reassigns, then Opus writes a new script. Each tier has a cap. A
-gatherer that hits its hourly cap reruns its last script.
+Decisions come from the top (ADR-0001). The Opus tier sets goals for the
+guildbank, the guildbank sets tasks for workers. A worker runs its task; at run
+end or failure it reports and flags, one report moment on Haiku. The guildbank
+reads reports on a cadence and updates tasks; what it can rule on it rules on,
+the rest goes up to the Opus tier and comes back down as a task or a new script.
+Each tier has a cap. A worker whose flag is unanswered reruns its last task.
 
 | Tier | Tokens in / out per decision | Cost per decision | 10 bots, 8 hours |
 |---|---|---|---|
-| Haiku gatherer, 3 decisions per hour | 1.5k / 300 | $0.0003 | $0.07 |
-| Sonnet guildbank, 10 decisions per hour | 4k / 500 | $0.013 | $1.04 |
+| Haiku worker, 3 reports per hour | 1.5k / 300 | $0.0003 | $0.07 |
+| Sonnet guildbank, 10 reviews and rulings per hour | 4k / 500 | $0.013 | $1.04 |
 
 Two guilds of 10 for a day: about $2.20 at API rates, plus Opus escalations on
 the Claude Code subscription.
@@ -128,26 +131,29 @@ Rule to check:
 
 ## 5. Roles
 
-- **Gatherers (Haiku).** Run proven scripts for a fixed stint. At script end or
-  failure, one decision moment: run summary, personality card, menu of moves
-  (run again, bank, pay tax and hand over goods, sell to a shop, escalate).
+- **Workers (Haiku).** Run the task the guildbank set, for a fixed stint. At run
+  end or failure, one report moment: the run summary and any flag, in the
+  personality's voice. Workers do not choose their next task; they execute, pay
+  tax, report and flag.
 - **Guildbank (Sonnet).** Treasury, warehouse, exchange desk, and task
   assignment. Serves incoming trades, smelts or fletches, quotes on the exchange,
-  restocks, assigns knowledge packages. Decision moments are fewer and richer:
-  quote, restock, give, assign.
+  restocks, assigns knowledge packages. Reads the workers' reports on a cadence
+  and updates their tasks; rules on the flags it can, escalates the rest. Its
+  moments are fewer and richer: review, quote, restock, give, assign.
 - **Opus tier (a Claude Code session).** Never touches a bot during a run.
-  Designs the experiment, writes a new script when a gatherer escalates "no
-  script for this", builds the knowledge package from a proven run, does the
-  post-mortem.
+  Sets the guildbank's goals, rules on what it escalates and sends the ruling
+  back down as a task or a new script, builds the knowledge package from a
+  proven run, does the post-mortem.
 - **The daemon (TypeScript, zero tokens).** Runs scripts for N bots, keeps the
   ledger, runs the lag detector, writes the task board, calls the cheap tiers
   for decision moments, appends to a jsonl, writes escalations to a file the
   Opus session picks up.
 
-Personality cards: five lines in the decision prompt plus a bias on the menu and
-on the beneficial test. Greedy refuses trades under exchange price and gives
-knowledge but not items. Sharing gives above the tax. Cautious never escalates.
-Explorer escalates often.
+Personality cards: five lines in the report prompt plus a bias on execution
+discretion, which is the gap between the order and what happens: contribution
+above the tax, the beneficial test, what gets flagged, and how the report is
+worded. Greedy pays exactly the tax and asks for more. Sharing gives above the
+tax. Cautious flags every risk. Explorer flags alternatives and asks to try them.
 
 ## 6. The knowledge package
 
@@ -226,9 +232,9 @@ same window from `supervisor.py timeline`, and the screenshots taken in it.
 earn it, an HTML page that plays the position trace over the map, which needs no
 game client and can replay any past run.
 
-**Layer 3, summary, one decision moment per run.** At run end the tier that ran
-the bot writes `summary` into the run record: three lines always, what was
-attempted, what happened, the numbers. When the run holds a flagged event (a
+**Layer 3, the report, one moment per run.** At run end the worker writes its
+report into the run record, and the report is the summary: three lines always,
+what was attempted, what happened, the numbers, plus any flag for the guildbank. When the run holds a flagged event (a
 death, a quest complete, an escalation, a route into the Wilderness, a trade
 above a size, or anything the card finds surprising) it writes a longer
 narrative in the bot's own voice and sets `story: {score, pitch}`. The
@@ -368,7 +374,7 @@ ratified return.
 Prediction to test first. Under a weakest-link rule the known risk is not
 free-riding but drag: strong members slow down to lift the floor, and the guild
 mean grows slower while the floor rises. Watch the mean, not just the laggard.
-Medium confidence that lab results transfer to bots choosing from menus.
+Medium confidence that lab results transfer to bots executing orders and reporting.
 
 Sample caveat. Two guilds is a sample of two; drift between them may be noise.
 Within-guild metrics have ten members each, and the first clean result will be
@@ -399,8 +405,8 @@ curve, action speed and gold are not OSRS.
 | Knob | Low | Default | High |
 |---|---|---|---|
 | Guild size | 3 | 5 | 10 (hard cap) |
-| Decision moment | script end only | every 15 min | every 5 min |
-| Haiku decisions per bot per hour (cap) | 4 | 8 | 20 |
+| Report moment | run end only | every 15 min | every 5 min |
+| Haiku reports per bot per hour (cap) | 4 | 8 | 20 |
 | Opus escalations per guild per hour | 0 | 1 | 3 |
 | Lag trigger, quests behind guild mean | 2 | 3 | 5 |
 | Lag trigger, levels behind guild mean in one skill | 5 | 10 | 15 |
@@ -441,10 +447,11 @@ Medium confidence throughout; recalled, not re-checked online.
 
 ## 13. Open decisions and the operator's part
 
-ADR-grade, awaiting the operator's restatement in their own words before any
-code or ADR is written:
+ADR-grade. The first was restated by the operator on 2026-10-20 and written as
+ADR-0001; the second still awaits restatement before any code or ADR:
 
-1. The three-tier ladder with the decision moment as the unit of cost.
+1. Ruled: decisions come from the top. Workers execute, report and flag; flags
+   go up, rulings come down. `bots/acquiredl/adrs/0001-chain-of-command.md`.
 2. API versus Claude Code sessions for the Haiku and Sonnet tiers. Three terms
    now: dollars (API cheap, sessions free), metering (API exact, sessions
    coarse), receipts (sessions recorded by loxodonta, API daemon not recorded
@@ -460,8 +467,8 @@ Assumptions to confirm:
 - A camera account outside the guild is allowed and does not count against
   the cap (section 7).
 
-The operator owns the examples. Three to five cases of "ledger state plus
-personality card gives this response" become the daemon's tests. For instance:
+The operator owns the examples. Three to five cases of "task plus run plus
+personality card gives this execution and this report" become the daemon's tests. For instance:
 a member two quests behind the mean with no package for the next quest, guildbank
 is sharing; a member lacks a 1-gold tool, treasury is 500, guildbank is greedy;
 a member five quests behind, the guild is past the gate.
