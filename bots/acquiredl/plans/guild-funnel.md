@@ -1,8 +1,8 @@
 # Guild funnel: a capped guild of bots with a guildbank and a warehouse
 
-Status: plan, drafted 2026-10-19 with the operator. Nothing built. Both ADR-grade
-items were ruled on 2026-10-20: ADR-0001 chain of command, ADR-0002 everything in
-sessions (`bots/acquiredl/adrs/`). Market figures are a snapshot from 2026-10-20 UTC and will have moved.
+Status: plan, drafted 2026-10-19 with the operator. Nothing built. Every open item was
+closed on 2026-10-20: three ADRs in `bots/acquiredl/adrs/`, the five cases kept,
+both assumptions confirmed. A fresh session starts from `guild-funnel-brief.md`. Market figures are a snapshot from 2026-10-20 UTC and will have moved.
 
 ## 1. The question
 
@@ -86,8 +86,8 @@ Rulings by the operator, 2026-10-19. The charter lives in `bots/guild/CHARTER.md
 once built, and every rule becomes a check in the daemon. Simplify, don't add:
 no new layer in the SDK.
 
-**Cap.** A guild holds at most 10 members, the guildbank included (assumption:
-9 gatherers plus 1; the operator confirms). Scaling is by whole guilds: 10, 20,
+**Cap.** A guild holds at most 10 members, the guildbank included: 9 workers
+plus 1, confirmed by the operator on 2026-10-20. Scaling is by whole guilds: 10, 20,
 30. Small groups over a fleet of 100.
 
 **End goal, shared by every guild.** Progress every account (quests, skills,
@@ -464,11 +464,11 @@ ADR-grade. Both were restated by the operator on 2026-10-20 and written:
    Sonnet guildbank session and a Haiku reports session on `/loop` cadences
    under the Opus session. `bots/acquiredl/adrs/0002-everything-in-sessions.md`.
 
-Assumptions to confirm:
+Confirmed by the operator on 2026-10-20:
 
-- The guildbank counts as one of the 10.
+- The guildbank counts as one of the 10: nine workers plus one.
 - "Levels behind" is per skill against the guild mean for that skill, since
-  skill unlocks are what the rule is meant to catch. Total level is the alternative.
+  skill unlocks are what the rule is meant to catch.
 - Ruled 2026-10-20 (ADR-0003): guild bots use chat; the gate no longer gates
   it. The quest loop's own chat ruling is unchanged for quest iterations.
 - A camera account outside the guild is allowed and does not count against
