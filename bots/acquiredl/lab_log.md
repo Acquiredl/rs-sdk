@@ -218,7 +218,7 @@ Depended on acquiredl's levels: Mining 55 made the clay and tin one click each, 
 4. Restless Ghost start, Duke, Wizard Tower (Sedridor, skull, Mizgog), coffin.
 5. Draynor: Ernest, Ned, Aggie; then Port Sarim, Rimmington, Falador, Goblin Village, Varrock, Al Kharid as in the order sketch.
 
-### Run (2026-10-19 19:47 to 2026-10-20, Imp Catcher still running at 05:55 local)
+### Run (2026-10-19 19:47 to 2026-10-20 07:28 local)
 - Start: Acquiredl1 at (3222, 3222), combat 3, 0 coins, the starter kit, 10 free slots.
 - Hiscores before the first quest: the page answers only for the lowercase name (`/hiscores/player/acquiredl1`; `Acquiredl1` gives "not found"). Every row "-", Quest Points "-".
 - Setup trap, 5 minutes: the operator's tab was logged in, but its URL said `bot=acquiredl1`. The gateway keys bot sessions by the exact name string (`server/gateway/gateway.ts`, `botSessions`), so scripts reading `BOT_USERNAME=Acquiredl1` from bot.env saw "Nothing is logged into the game". The game login accepts either case. The operator changed the URL to `bot=Acquiredl1` and state arrived at 19:52.
@@ -238,7 +238,7 @@ Depended on acquiredl's levels: Mining 55 made the clay and tin one click each, 
 12. Ernest the Chicken start to finish; out of the manor; Sedridor with the notes: Rune Mysteries done.
 13. Lumbridge church altar, imprint try 3 (key print), Osman (key ordered), altar, Leela (key and stage 30 in one talk), rescue tries 1 to 4 (Joe on try 2, rope and prince on try 4).
 14. Goblin Village: 12 kills for the third mail, generals: Goblin Diplomacy done.
-15. Imps round Falador (13 minutes, 3 kills), Hassan: Prince Ali done at 23:46 (ten quests in 3h59m from the first state check); then imp hunts round Lumbridge and north of Varrock from 23:47 on.
+15. Imps round Falador (13 minutes, 3 kills), Hassan: Prince Ali done at 23:46 (ten quests in 3h59m from the first state check); then imp hunts round Lumbridge and north of Varrock from 23:47; the white bead came at 07:25, Mizgog at 07:27: Imp Catcher done, all eleven. Parked in the courtyard at 07:28.
 
 ### Incidents
 1. **Case of the bot name in the URL** (above): 5 minutes.
@@ -254,12 +254,13 @@ Depended on acquiredl's levels: Mining 55 made the clay and tin one click each, 
 11. **Ernest: leaving the manor took 5 minutes** (`walkInto` with tolerance 0 opened the wrong doors, the front door among them). Not fixed.
 12. **Juliet's house again, 2.5 minutes per visit:** `walkInto` tried five closed doors before the north door (3160, 3440). `toJuliet` now opens the north door first (untested: Romeo & Juliet is done on this character).
 13. **Toll gate:** `travel()` treats the toll gate as a door on its leg and times out opening it (about 10 s per crossing, 1.5 minutes once on the way to Hassan).
-14. **Imp Catcher, the long pole.** Over six hours of hunting (170 counted kills by 05:44) and still no white bead. Two script faults made it worse:
+14. **Imp Catcher, the long pole.** Eight hours of hunting (23:26 to 07:26, 13 hunt runs, 213 counted kills); the white bead came last, at counted kill 213. Two script faults made it worse:
     - For hunts 1 to 5 (67 counted kills) `fight.ts` scanned for loot 2 ticks after the imp's hp hit 0, before the drop appears after the death animation, so beads could land unseen. From hunt 6 it waits up to 8 ticks for something to appear at the kill tile and logs what it saw (`LOG_DROPS=1`). The first 6 kills after the fix gave two red beads.
     - An imp that teleports out of view counts as a kill: in hunts 6 to 8, 26 of 66 logged kills left nothing on the ground, not even the Ashes every imp drops.
     - Real kills since the fix: about one every 3 minutes, against other players (about a third of attacks hit "target_not_found"). One far imp by the Wilderness ditch cost a 120 s walk timeout; `MAX_DIST` and a lower `MAX_Z` now skip those.
     - Where the kills came from: the Falador farm cluster and the two Falador spawns, 3 kills in 13 min; the Lumbridge ring, 4 in 10 min; Edgeville, none in two laps; the Varrock north cluster (3213, 3500) (3234, 3504) (3258, 3508) plus (3238, 3390), all the rest.
-    - The drop table is as the facts say (`drop tables/scripts/imp.rs2`: black 0-4, red 5-9, white 10-14, yellow 15-19 of `random(128)`), and the logged ground items never showed a white bead. 17 beads so far, none white: about a 0.75% chance ((3/4)^17). Recorded, not engineered around.
+    - Since the fix (hunts 6 to 13): 146 counted kills, 88 real (each left Ashes), 56 phantom; about one real kill every 3.7 minutes. The Lumbridge ring in the early morning was the best stretch: 21 kills in 50 minutes, no teleport losses.
+    - Bead record: yellow 8, red 9, black 6, white 1 (24 beads; 3 of them before the loot fix in 67 counted kills, 21 after it in 88 real kills). Before the white came, 23 beads in a row were not white: about a 0.13% chance ((3/4)^23). The drop table is as the facts say (`drop tables/scripts/imp.rs2`: black 0-4, red 5-9, white 10-14, yellow 15-19 of `random(128)`), and the server's `random` is a Java-style generator; nothing blocks white. Recorded, not engineered around.
 15. No deaths. Lowest HP: 7/34 at the jail (incident 5).
 
 ### Per-quest table, iteration 1 beside iteration zero
@@ -277,11 +278,11 @@ Local time; "runs" counts logged script runs, "+n" the runs killed or crashed be
 | Rune Mysteries | **done** | 20:20 | 22:41 | 9 min | 5 (1) | 1,765 | 0 | none | stage 3, package lost |
 | Goblin Diplomacy | **done** | 21:33 | 23:26 | 15 min | 8 (2) | 2,730 | -16 | woad 20 gp, dyes 15 gp, beers 6 gp; 3 goblin mail from 56 goblin kills | not started |
 | Prince Ali Rescue | **done** | 20:51 | 23:46 | 47 min | 26 (5) | 8,647 | +633 | kebabs 5, tolls 40, skirt 2, rope 15, yellow dye 5; wool, onions, redberries, flour, ashes, Hassan's jugs, clay, bronze bar | stage 20 |
-| Imp Catcher | started; 3 of 4 beads | 21:00 | (running) | 369 min of hunting by 05:44 | 11 (10) | 66,202 | 0 | 170 counted kills: yellow 5, red 8, black 4, white 0 | started, 0 beads |
+| Imp Catcher | **done** | 21:00 | 07:27 | 471 min, nearly all hunting | 15 (12) | 83,558 | 0 | 213 counted kills (88 real since the loot fix): yellow 8, red 9, black 6, white 1 | started, 0 beads |
 | (prep, banking) | | 19:55 | 22:02 | 4 min | 3 (0), more banking logged under quests | 720 | +49 | starter junk sold +50, shears -1 | |
 | (combat training) | | 20:37 | 20:51 | 13 min | 3 (1) | 2,466 | +58 | 44 goblins: combat 3 to 34, 2 goblin mail | 48 goblins, 11 min, combat 9 to 36 |
 
-Where the time went, the ten finished quests (19:47 to 23:46, 3h59m): quest steps that worked, about 2h20m; the Draynor jail (seven entries, three altar trips), about 35 min; Ernest's fountain stall and manor exit, about 16 min; state-gap crashes and the bot-name case, about 8 min; Juliet's doors, about 5 min; the rest walking. Iteration zero finished 3 quests in 2h40m.
+All eleven: 19:47 to 07:27, 11h40m, of which ten quests took the first 3h59m and the four imp beads the other 7h41m. Where the time went in the ten (19:47 to 23:46): quest steps that worked, about 2h20m; the Draynor jail (seven entries, three altar trips), about 35 min; Ernest's fountain stall and manor exit, about 16 min; state-gap crashes and the bot-name case, about 8 min; Juliet's doors, about 5 min; the rest walking. Iteration zero finished 3 quests in 2h40m.
 
 ### Post-mortem, quest by quest
 - **Cook's Assistant (7 min of script, done 12 min after the first run; iteration zero 7 min).** Lost: two script deaths on state gaps (before the `lib.ts` patch) and the flour bin's second Empty doing nothing (the flour stays in the bin; `bin` collects it later, the gather loop now retries). The kitchen's free pot and jug are picked up by `start`. Could be 5 min.
@@ -294,7 +295,7 @@ Where the time went, the ten finished quests (19:47 to 23:46, 3h59m): quest step
 - **Ernest the Chicken (13 min logged, plus about 16 in two killed runs).** Every inside step ran clean in one pass. Lost: the walk to the fountain (11 min stalled), leaving the manor (5 min), and one oil-can stop (scan radius). Fix the two walks with fixed raw routes and it is a 15 min quest.
 - **Goblin Diplomacy (15 min of script, plus 6 min of village kills).** Dyes in one Aggie visit, both mails dyed on the spot; three mails from 56 goblin kills (2 from the 44 training kills, 1 from 12 village kills). Three general talks in one run.
 - **Prince Ali Rescue (about 50 min of script over 2h55m; iteration zero did not finish).** Everything outside the jail took about 15 min. The jail took seven entries and three Lumbridge altar trips (incidents 5 to 8): about 35 min. With the recipe in the feed-forward, two entries (imprint, rescue) and one altar trip should do.
-- **Imp Catcher (not finished at 05:55).** Started at 21:00 on the tower trip. The bead hunt is the whole quest: 6+ hours, 170 counted kills, 17 beads, no white. Lost to the loot-timing fault in hunts 1 to 5 (beads may have landed unseen), to teleports counted as kills, to walking between spread-out spawns, and to other players on the same imps. With the fixed `fight.ts` and the Varrock north spots it is about one real kill every 3 minutes, so the expected 53 kills for all four colours is still about 2h40m of pure hunting.
+- **Imp Catcher (7h41m after the tenth quest).** Started at 21:00 on the tower trip; the start and the hand-in took 2 minutes each. The bead hunt is the whole quest: 213 counted kills, 24 beads, the white one last. Lost to the loot-timing fault in hunts 1 to 5 (3 beads in 67 counted kills, against about 10 expected), to teleports counted as kills, to walking between spread-out spawns, to other players on the same imps, and to plain luck on white. With the fixed `fight.ts`, the expected 53 real kills at 3.7 minutes each is about 3h15m of hunting; this run needed about twice that.
 - **Combat training (13 min, 44 kills).** Defence first was the wrong order on a fresh character: at Attack 1 the first round managed 12 kills in 5 minutes against 16 in 3 once Attack was trained. Strength later rose to 52 by itself in the jail fights.
 
 ### Feed-forward for iteration 2
@@ -314,7 +315,7 @@ Drafted ready to file, per the operator's ruling that nothing goes upstream unre
 1. "The `/bot` page registers the bot under the name exactly as typed in `?bot=`, and the gateway matches names case-sensitively (`botSessions` in server/gateway/gateway.ts), while the game login accepts any case. A tab opened as `bot=acquiredl1` for a bot.env with `BOT_USERNAME=Acquiredl1` logs in fine, but every script and `cli.ts` reports 'Nothing is logged into the game'. Normalising the name (or warning on a case-only mismatch) would avoid it. The hiscores page also answers only for the lowercase name."
 2. "`waitForTicks(n)` throws after n*1000+5000 ms without a state update. On a busy demo server (about 1,600 online) the browser client's state paused that long several times an hour, which killed scripts mid-action. A longer default, or a retry that only gives up after several gaps, would keep long scripts alive; I wrapped the method in my own helper to wait out up to 10 gaps."
 
-### Where things stand (05:55 local, 2026-10-20)
-- Ten of eleven quests done by the journal signal; hiscores read Quest Points 23 at 01:30 (the 24th comes with Imp Catcher).
-- Acquiredl1: hunting imps north of Varrock, combat 69 (Attack 70, Strength 59, Defence 27, HP 60, Prayer 47), 1,261 coins. Inventory: gold bar, yellow bead x5, red bead x8, black bead x4. Draynor bank: air talisman, jug, tinderbox, bronze pickaxe and a few leftovers.
-- Next: the white bead (`fight.ts` as in feed-forward item 8), then `bun bots/acquiredl/quests/imp-catcher.ts Acquiredl1 finish` (Mizgog, Wizard Tower top floor), then `bun bots/acquiredl/quests/go.ts Acquiredl1 park`.
+### Where things stand (07:28 local, 2026-10-20)
+- All eleven quests done by the journal signal (each journal page shows QUEST COMPLETE). Hiscores after the last quest (`/hiscores/player/acquiredl1`, read 07:34 after the client logged out): **Quest Points 24**, rank 413, stamped at playtime 10h 38m 02s; Overall 456 at 10h 35m 47s; Attack 70, Strength 64, Defence 27, Hitpoints 62, Prayer 47, Magic 48, Mining 52, Crafting 34, Cooking 32. Before: every row "-".
+- Acquiredl1 parked in the Lumbridge castle courtyard (3223, 3219) at 07:28, HP 62/62, combat 71; the operator's tab then logged out (no client at 07:34), so it stands there logged out. 1,261 coins. Inventory: gold bar, Amulet of accuracy, the spare beads (yellow 7, red 8, black 5). Draynor bank: air talisman, jug, tinderbox, bronze pickaxe and a few leftovers.
+- Nothing left to run for this iteration. Iteration 2 starts from the feed-forward above.
