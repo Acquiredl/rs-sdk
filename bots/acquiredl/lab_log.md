@@ -217,3 +217,104 @@ Depended on acquiredl's levels: Mining 55 made the clay and tin one click each, 
 3. Store (shears, jug, tinderbox), Cook's Assistant, Sheep Shearer with 7 extra balls, onions.
 4. Restless Ghost start, Duke, Wizard Tower (Sedridor, skull, Mizgog), coffin.
 5. Draynor: Ernest, Ned, Aggie; then Port Sarim, Rimmington, Falador, Goblin Village, Varrock, Al Kharid as in the order sketch.
+
+### Run (2026-10-19 19:47 to 2026-10-20, Imp Catcher still running at 05:55 local)
+- Start: Acquiredl1 at (3222, 3222), combat 3, 0 coins, the starter kit, 10 free slots.
+- Hiscores before the first quest: the page answers only for the lowercase name (`/hiscores/player/acquiredl1`; `Acquiredl1` gives "not found"). Every row "-", Quest Points "-".
+- Setup trap, 5 minutes: the operator's tab was logged in, but its URL said `bot=acquiredl1`. The gateway keys bot sessions by the exact name string (`server/gateway/gateway.ts`, `botSessions`), so scripts reading `BOT_USERNAME=Acquiredl1` from bot.env saw "Nothing is logged into the game". The game login accepts either case. The operator changed the URL to `bot=Acquiredl1` and state arrived at 19:52.
+
+### Order actually run
+1. Lumbridge store: sold the shortbow, axe, dagger, net and runes (+50 gp; the store took no earth runes), bought shears (1 gp).
+2. Cook's Assistant: kitchen floor pot and jug (free), wheat, mill, egg, milk; one cow for raw beef; hand-in. Burnt meat on the Cook's range straight after (raw, then cooked on the range again).
+3. Sheep Shearer: 18 wool (all the free slots), spun on castle plane 1 with the Duke in the same climb, 18 balls to Fred; then 5 more wool, 4 onions and the second flour, spun, 2 balls to Fred (3 kept for the wig).
+4. The Restless Ghost to stage 3 (Aereck, Urhney, ghost).
+5. Combat training: 44 Lumbridge goblins, combat 3 to 34 in 13 minutes, 2 goblin mail, +58 gp.
+6. Al Kharid: Hassan three times (two free jugs of water, then the start), Osman, 5 kebabs.
+7. Wizard Tower: Sedridor (talisman for the package), skull, Mizgog (Imp Catcher started); coffin: Ghost done (Prayer 1 to 47).
+8. Varrock: berries (4 red, 1 cadava), east bank (Draynor-bound items in), Aubury (notes), SE mine (5 copper, 1 tin, 3 iron), Romeo & Juliet start to finish, pink skirt, SW mine (7 clay, 2 iron).
+9. Doric (both talks in one visit), Falador furnace (bronze bar), Wyson (2 woad).
+10. Port Sarim: bartender (Goblin Diplomacy start), 3 beers, Betty (eye of newt). Rimmington: onion, Hetty, rat's tail, hand-in, cauldron: Witch's Potion done.
+11. Draynor: bank, Ned (wig, rope for 15 gp), Aggie (yellow dye for the wig; red, yellow, blue, orange for the mail), both mails dyed, ashes, paste, soft clay; imprint tries 1 and 2 failed (below).
+12. Ernest the Chicken start to finish; out of the manor; Sedridor with the notes: Rune Mysteries done.
+13. Lumbridge church altar, imprint try 3 (key print), Osman (key ordered), altar, Leela (key and stage 30 in one talk), rescue tries 1 to 4 (Joe on try 2, rope and prince on try 4).
+14. Goblin Village: 12 kills for the third mail, generals: Goblin Diplomacy done.
+15. Imps round Falador (13 minutes, 3 kills), Hassan: Prince Ali done at 23:46 (ten quests in 3h59m from the first state check); then imp hunts round Lumbridge and north of Varrock from 23:47 on.
+
+### Incidents
+1. **Case of the bot name in the URL** (above): 5 minutes.
+2. **State gaps.** With about 1,600 players online, the browser client's state paused for over 6 s several times an hour, and `waitForTicks` threw "safety timeout" and killed the script mid-step (Cook's gather, twice). `lib.ts` now wraps `BotSDK.prototype.waitForTicks` to wait out up to 10 gaps; every bot.* action goes through it. After the patch, gaps showed as "(state gap 1, still waiting)" and nothing died. Fresh `cli.ts` connections still timed out about 5 times in 6 at the worst moment.
+3. **Talisman lost to a full inventory.** The Duke's "hands you an air talisman" ran with 28 items held (10 kept items plus 18 balls); the talisman did not arrive, but the stage advanced. Talking to the Duke again with a free slot gave a replacement ("One of my servants found this outside").
+4. **Iron ore dropped.** `drop.ts "^iron ore$"` dropped all three ores, not the spare; two more were mined at the SW mine (1 minute). `drop.ts` now takes `regex:n`.
+5. **Draynor jail, imprint try 1: HP 31 to 7, fled.** Protect from Melee was on, the guards still broke Keli's conversation after one line, and when the script ended auto-retaliate kept fighting outside the north door. `flee.ts` (prayer on, walk north, eat) got out at HP 7/34 and ate both remaining kebabs. Reading `npc_combat_melee.rs2`: every NPC melee swing runs `if_close` before the damage roll, so even a 0 under Protect from Melee shuts the dialogue.
+6. **Imprint try 2: a guard followed the bot into Keli's room.** All four guards spawn outside Keli's room, and their only way in is the north door (3128, 3246) (checked with the SDK planner from each spawn). Shutting the door behind the bot worked, but a guard that was already on it walked in first; the talk broke after the third choice, twice. Prayer was down to 8, so the bot left.
+7. **Imprint try 3: key print.** Prayer recharged at the Lumbridge church altar (the only altar near Draynor: loc 409 appears in map square m50_50 and none of 47-49 x 49-52), then: prayer on, in, door shut, kill the follower under the prayer, prayer off, talk. Keli's whole branch ran in one pass.
+8. **Rescue tries 1 to 3.** Try 1: the bot fought a follower until the prayer ran out, then Joe's beer talk was cut three times; HP 38 to 13. Try 2: Joe drank all three beers (stage 40), but the rope's "You overpower Keli" message box was closed by a hit before its continue click, and the tie only lands after that click (`quest_prince.rs2`); probably another player had opened the room door. Try 3: "I can't reach that!" on the rope: Keli was not in the room. Try 4, with full prayer and a kill at the door before entering: Keli was in the room, tied, key on the cell door, prince freed.
+9. **Ernest: the walk to the fountain stalled for about 11 minutes** at (3127, 3353), east of the manor ("The door is locked."). Killed; a stray raw walk then reached the fountain and the gauge took 28 s. `leave()` now walks the entry path back toward the gate.
+10. **Ernest: oil can.** The scripted lever plan stopped at door 5to8, 16 tiles away, because `rawLoc` scanned 15; widened to 25. The rest ran with `basement.ts` tokens in 2 minutes; `basement.ts` gained `R:` for the secret-room lever.
+11. **Ernest: leaving the manor took 5 minutes** (`walkInto` with tolerance 0 opened the wrong doors, the front door among them). Not fixed.
+12. **Juliet's house again, 2.5 minutes per visit:** `walkInto` tried five closed doors before the north door (3160, 3440). `toJuliet` now opens the north door first (untested: Romeo & Juliet is done on this character).
+13. **Toll gate:** `travel()` treats the toll gate as a door on its leg and times out opening it (about 10 s per crossing, 1.5 minutes once on the way to Hassan).
+14. **Imp Catcher, the long pole.** Over six hours of hunting (170 counted kills by 05:44) and still no white bead. Two script faults made it worse:
+    - For hunts 1 to 5 (67 counted kills) `fight.ts` scanned for loot 2 ticks after the imp's hp hit 0, before the drop appears after the death animation, so beads could land unseen. From hunt 6 it waits up to 8 ticks for something to appear at the kill tile and logs what it saw (`LOG_DROPS=1`). The first 6 kills after the fix gave two red beads.
+    - An imp that teleports out of view counts as a kill: in hunts 6 to 8, 26 of 66 logged kills left nothing on the ground, not even the Ashes every imp drops.
+    - Real kills since the fix: about one every 3 minutes, against other players (about a third of attacks hit "target_not_found"). One far imp by the Wilderness ditch cost a 120 s walk timeout; `MAX_DIST` and a lower `MAX_Z` now skip those.
+    - Where the kills came from: the Falador farm cluster and the two Falador spawns, 3 kills in 13 min; the Lumbridge ring, 4 in 10 min; Edgeville, none in two laps; the Varrock north cluster (3213, 3500) (3234, 3504) (3258, 3508) plus (3238, 3390), all the rest.
+    - The drop table is as the facts say (`drop tables/scripts/imp.rs2`: black 0-4, red 5-9, white 10-14, yellow 15-19 of `random(128)`), and the logged ground items never showed a white bead. 17 beads so far, none white: about a 0.75% chance ((3/4)^17). Recorded, not engineered around.
+15. No deaths. Lowest HP: 7/34 at the jail (incident 5).
+
+### Per-quest table, iteration 1 beside iteration zero
+Local time; "runs" counts logged script runs, "+n" the runs killed or crashed before they could log. Ticks are summed over logged runs (about 0.35 s each).
+
+| Quest | Iteration 1 | First run | Done | Script time | Runs (not ok) | Ticks | Coins | Bought / gathered | Iteration zero |
+|---|---|---|---|---|---|---|---|---|---|
+| Cook's Assistant | **done** | 19:58 | 20:10 | 7 min | 4 (1), +2 crashed | 1,267 | 0 | kitchen pot and jug (free); wheat, mill; egg; milk (any cow) | done, 7 min, 6 (2) |
+| Sheep Shearer | **done** | 20:11 | 20:29 | 13 min | 7 (0) | 2,501 | +60 | shears 1 gp; 23 wool, spun on the castle wheel | done, 13 min, 6 (2) |
+| The Restless Ghost | **done** | 20:29 | 21:03 | 10 min | 7 (2) | 1,876 | 0 | none | stage 4, skull lost |
+| Romeo & Juliet | **done** | 21:06 | 21:26 | 15 min | 9 (0) | 2,814 | 0 | cadava berries (ground, SE Varrock) | done, 11 min, 13 (5) |
+| Doric's Quest | **done** | 21:09 | 21:31 | 6 min | 7 (1) | 1,183 | +180 | 7 clay and 2 iron (SW mine), 5 copper and 1 tin (SE mine) | not started |
+| Witch's Potion | **done** | 20:09 | 21:40 | 4 min | 7 (0) | 709 | -3 | raw beef (cow), burnt on the Cook's range; onion (Rimmington); rat's tail; eye of newt 3 gp | not started |
+| Ernest the Chicken | **done** | 22:03 | 22:32 | 13 min, +about 16 in killed runs | 11 (1), +2 killed | 2,363 | +300 | none, all in the manor | stage 2 |
+| Rune Mysteries | **done** | 20:20 | 22:41 | 9 min | 5 (1) | 1,765 | 0 | none | stage 3, package lost |
+| Goblin Diplomacy | **done** | 21:33 | 23:26 | 15 min | 8 (2) | 2,730 | -16 | woad 20 gp, dyes 15 gp, beers 6 gp; 3 goblin mail from 56 goblin kills | not started |
+| Prince Ali Rescue | **done** | 20:51 | 23:46 | 47 min | 26 (5) | 8,647 | +633 | kebabs 5, tolls 40, skirt 2, rope 15, yellow dye 5; wool, onions, redberries, flour, ashes, Hassan's jugs, clay, bronze bar | stage 20 |
+| Imp Catcher | started; 3 of 4 beads | 21:00 | (running) | 369 min of hunting by 05:44 | 11 (10) | 66,202 | 0 | 170 counted kills: yellow 5, red 8, black 4, white 0 | started, 0 beads |
+| (prep, banking) | | 19:55 | 22:02 | 4 min | 3 (0), more banking logged under quests | 720 | +49 | starter junk sold +50, shears -1 | |
+| (combat training) | | 20:37 | 20:51 | 13 min | 3 (1) | 2,466 | +58 | 44 goblins: combat 3 to 34, 2 goblin mail | 48 goblins, 11 min, combat 9 to 36 |
+
+Where the time went, the ten finished quests (19:47 to 23:46, 3h59m): quest steps that worked, about 2h20m; the Draynor jail (seven entries, three altar trips), about 35 min; Ernest's fountain stall and manor exit, about 16 min; state-gap crashes and the bot-name case, about 8 min; Juliet's doors, about 5 min; the rest walking. Iteration zero finished 3 quests in 2h40m.
+
+### Post-mortem, quest by quest
+- **Cook's Assistant (7 min of script, done 12 min after the first run; iteration zero 7 min).** Lost: two script deaths on state gaps (before the `lib.ts` patch) and the flour bin's second Empty doing nothing (the flour stays in the bin; `bin` collects it later, the gather loop now retries). The kitchen's free pot and jug are picked up by `start`. Could be 5 min.
+- **Sheep Shearer (13 min, as in iteration zero).** Two rounds, because after the kit only 18 wool fit; spinning took 10 batches for 18 balls (every Crafting level-up breaks Make 10, about 13 s a batch). Fred takes partial deliveries, so the second round was 5 wool (2 for Fred, 3 for the wig). Faster: sell or drop more of the kit first so 23 wool fit in one round.
+- **The Restless Ghost (10 min of script).** Clean apart from the walk from the Wizard Tower's west room to the coffin (the planner finds no path out of that room; a raw click works) and one skull-on-coffin timeout while the coffin was open. Doing it before any danger paid twice: Prayer 47 unlocked Protect from Melee for the jail.
+- **Romeo & Juliet (15 min; iteration zero 11).** Romeo, Lawrence, the Apothecary and the berries took under a minute each. Juliet's house took 7 and 4 minutes: `walkInto` tried five wrong doors before the north door (3160, 3440). With the new north-door-first `toJuliet` it should be about 8 min.
+- **Rune Mysteries (9 min of script, spread over 2h20m around other quests).** One extra Duke visit: the talisman was lost to a full inventory. Sedridor's two visits paired with the skull and the Ernest trip; Aubury paired with the Varrock bank.
+- **Doric's Quest (6 min).** Both talks in one visit, ores mined at the two Varrock mines during the Romeo & Juliet trip (Mining 1 to 15 on 6 copper/tin, then iron). The `drop.ts` mistake cost a minute.
+- **Witch's Potion (4 min of script).** The cleanest: raw beef from the cow next to the Cook's milk, burnt on the Cook's range at the hand-in; onion, rat and newt on the Port Sarim to Rimmington leg; Hetty start and finish 3 minutes apart.
+- **Ernest the Chicken (13 min logged, plus about 16 in two killed runs).** Every inside step ran clean in one pass. Lost: the walk to the fountain (11 min stalled), leaving the manor (5 min), and one oil-can stop (scan radius). Fix the two walks with fixed raw routes and it is a 15 min quest.
+- **Goblin Diplomacy (15 min of script, plus 6 min of village kills).** Dyes in one Aggie visit, both mails dyed on the spot; three mails from 56 goblin kills (2 from the 44 training kills, 1 from 12 village kills). Three general talks in one run.
+- **Prince Ali Rescue (about 50 min of script over 2h55m; iteration zero did not finish).** Everything outside the jail took about 15 min. The jail took seven entries and three Lumbridge altar trips (incidents 5 to 8): about 35 min. With the recipe in the feed-forward, two entries (imprint, rescue) and one altar trip should do.
+- **Imp Catcher (not finished at 05:55).** Started at 21:00 on the tower trip. The bead hunt is the whole quest: 6+ hours, 170 counted kills, 17 beads, no white. Lost to the loot-timing fault in hunts 1 to 5 (beads may have landed unseen), to teleports counted as kills, to walking between spread-out spawns, and to other players on the same imps. With the fixed `fight.ts` and the Varrock north spots it is about one real kill every 3 minutes, so the expected 53 kills for all four colours is still about 2h40m of pure hunting.
+- **Combat training (13 min, 44 kills).** Defence first was the wrong order on a fresh character: at Attack 1 the first round managed 12 kills in 5 minutes against 16 in 3 once Attack was trained. Strength later rose to 52 by itself in the jail fights.
+
+### Feed-forward for iteration 2
+1. **Name case.** The `bot=` name in the browser URL must match `BOT_USERNAME` in bot.env exactly: the gateway matches names case-sensitively, the game login does not. The hiscores page answers only for the lowercase name.
+2. **State gaps are handled in `lib.ts`** (wrapped `waitForTicks`). Keep importing `lib.ts` in every script; a script that does not will die on the first 6-second pause.
+3. **Day one in Lumbridge:** sell the shortbow, axe, dagger, net and runes (about 50 gp), take the kitchen's free pot and jug, kill one cow for raw beef by the milk cows, burn it on the Cook's range after the hand-in.
+4. **Train Attack first, then Strength, then Defence:** 44 Lumbridge goblins took combat 3 to 34 in 13 minutes and paid 58 gp and 2 goblin mail. Kill imps on the way.
+5. **The Restless Ghost before any danger.** Its 28,125 Prayer XP gives Prayer 47 and Protect from Melee, which the jail needs.
+6. **The Draynor jail recipe** (imprint, Joe, rope, cell door): bank every valuable first (a death drops everything but 3 items); full prayer from the Lumbridge church altar (the only altar near Draynor); prayer on at (3128, 3250); kill the guard that is on you at the door (accurate style); open the north door (3128, 3246), step to (3128, 3245), close it; kill any guard that followed you in; prayer off; then talk. Every guard swing closes dialogue (`if_close`), even a 0. If "I can't reach that!" on Keli, she has wandered out: wait in the room. The rope's tie lands only after its message box is clicked through. One entry costs about 40 prayer points.
+7. **Inventory is the constraint everywhere.** Bank at Varrock east before the Varrock block and at Draynor before the Draynor block (the bank is one store, so Varrock deposits come out at Draynor). Keep a free slot for any NPC that hands you something (the Duke's talisman vanished with 28 held).
+8. **Imp Catcher is the long pole.** Kill every imp met from day one (the training goblins share Lumbridge with one). For the dedicated hunt: `LOG_DROPS=1 MAX_Z=3512 MAX_DIST=12 IDLE_TICKS=45 SPOTS="3213,3500;3234,3504;3258,3508;3238,3390" UNTIL_ALL=... fight.ts <bot> imp "^imp$" 300 "^(black|red|white|yellow) bead$"`, and stop it cleanly with `touch quests/STOP-<bot>`. Budget hours, not minutes, and record the beads per kill.
+9. **Known walks that still waste time:** Juliet's house (north door first, untested), the Wizard Tower's west room (raw click out), Ernest's fountain and the manor exit (use fixed raw routes), the Al Kharid toll gate (`travel()` tries to open the gate as a door; let `tollGate()` own it).
+10. **Order that worked, with the changes:** Lumbridge (store, Cook's, beef, Sheep, Duke, Ghost 1-3, goblins and imps) -> Al Kharid (Hassan, Osman, 10 kebabs) -> Wizard Tower (Sedridor, skull, Mizgog) -> coffin -> Varrock (berries, bank, Aubury, mines, Romeo & Juliet, skirt) -> Doric, Falador furnace, Wyson -> Port Sarim, Rimmington (Witch) -> Draynor (bank, Ned, Aggie, ashes, paste, clay, **imprint on this first visit with the recipe**) -> Ernest -> Sedridor -> Al Kharid (Osman) -> Lumbridge altar -> Draynor (Leela, rescue) -> Goblin Village -> Al Kharid (Hassan) -> imps -> Mizgog.
+
+### Bug-report candidates (held for the operator's review, not filed)
+Drafted ready to file, per the operator's ruling that nothing goes upstream unreviewed.
+1. "The `/bot` page registers the bot under the name exactly as typed in `?bot=`, and the gateway matches names case-sensitively (`botSessions` in server/gateway/gateway.ts), while the game login accepts any case. A tab opened as `bot=acquiredl1` for a bot.env with `BOT_USERNAME=Acquiredl1` logs in fine, but every script and `cli.ts` reports 'Nothing is logged into the game'. Normalising the name (or warning on a case-only mismatch) would avoid it. The hiscores page also answers only for the lowercase name."
+2. "`waitForTicks(n)` throws after n*1000+5000 ms without a state update. On a busy demo server (about 1,600 online) the browser client's state paused that long several times an hour, which killed scripts mid-action. A longer default, or a retry that only gives up after several gaps, would keep long scripts alive; I wrapped the method in my own helper to wait out up to 10 gaps."
+
+### Where things stand (05:55 local, 2026-10-20)
+- Ten of eleven quests done by the journal signal; hiscores read Quest Points 23 at 01:30 (the 24th comes with Imp Catcher).
+- Acquiredl1: hunting imps north of Varrock, combat 69 (Attack 70, Strength 59, Defence 27, HP 60, Prayer 47), 1,261 coins. Inventory: gold bar, yellow bead x5, red bead x8, black bead x4. Draynor bank: air talisman, jug, tinderbox, bronze pickaxe and a few leftovers.
+- Next: the white bead (`fight.ts` as in feed-forward item 8), then `bun bots/acquiredl/quests/imp-catcher.ts Acquiredl1 finish` (Mizgog, Wizard Tower top floor), then `bun bots/acquiredl/quests/go.ts Acquiredl1 park`.

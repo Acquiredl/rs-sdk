@@ -8,6 +8,7 @@
 // SPOTS="x,z;x,z;...": rotate to the next spot after IDLE_TICKS (default 15)
 // with no target in view (imps are spread one or three to a spawn).
 // MAX_Z (default 3517): never target an NPC at or past the Wilderness line.
+// MAX_DIST (default 99): skip targets further away (a far imp by the ditch cost a 120 s walk timeout).
 // Touch quests/STOP-<bot> to end a run cleanly (its run record still gets written).
 import { runScript } from '../../../sdk/runner';
 import { startRun, endRun, note, travel, pickup, hpGuard, count, has, st, log, pos, BOT, type Ctx } from './lib';
@@ -27,6 +28,7 @@ const UNTIL_ALL = process.env.UNTIL_ALL ? process.env.UNTIL_ALL.split(',').map(s
 const SPOTS = (process.env.SPOTS ?? '').split(';').filter(Boolean).map(p => { const [x, z] = p.split(',').map(Number); return { x, z }; });
 const IDLE_TICKS = Number(process.env.IDLE_TICKS ?? 15);
 const MAX_Z = Number(process.env.MAX_Z ?? 3517);
+const MAX_DIST = Number(process.env.MAX_DIST ?? 99);
 const STOP_FILE = join(import.meta.dir, `STOP-${BOT}`);
 
 await runScript(async ({ bot, sdk }) => {
@@ -49,7 +51,7 @@ await runScript(async ({ bot, sdk }) => {
         if (!(await hpGuard(c, MIN_HP, MIN_HP))) { note(c, r, `hp ${st(c).player!.hp}, no food: stopping`); break; }
         if (st(c).inventory.length >= 28 && LOOT) { note(c, r, 'inventory full'); break; }
         const npc = st(c).nearbyNpcs
-            .filter(n => NPC.test(n.name) && n.reachable !== false && n.z <= MAX_Z && n.optionsWithIndex.some(o => /^attack$/i.test(o.text)))
+            .filter(n => NPC.test(n.name) && n.reachable !== false && n.z <= MAX_Z && n.distance <= MAX_DIST && n.optionsWithIndex.some(o => /^attack$/i.test(o.text)))
             .filter(n => !n.inCombat || n.targetIndex === -1)
             .sort((a, b) => a.distance - b.distance)[0];
         if (!npc) {
