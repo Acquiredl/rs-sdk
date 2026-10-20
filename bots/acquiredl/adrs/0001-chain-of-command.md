@@ -65,8 +65,8 @@ As the active choice:
 **What we'll have to revisit if:**
 - Decision latency starves workers in Stage 2, which argues for a larger
   standing task list per worker rather than per-run assignment.
-- Rulings happen somewhere loxodonta cannot record (ADR-0002, API versus
-  sessions, still open as of this writing).
+- Rulings happen somewhere loxodonta cannot record. ADR-0002 put every model
+  moment in a session, so today only the daemon's own script runs are unrecorded.
 
 ## Alternatives considered
 

@@ -1,8 +1,8 @@
 # Guild funnel: a capped guild of bots with a guildbank and a warehouse
 
-Status: plan, drafted 2026-10-19 with the operator. Nothing built. The chain of
-command was ruled on 2026-10-20 (ADR-0001, `bots/acquiredl/adrs/`); one ADR-grade
-item, API versus sessions, still waits for the operator's restatement (section 13). Market figures are a snapshot from 2026-10-20 UTC and will have moved.
+Status: plan, drafted 2026-10-19 with the operator. Nothing built. Both ADR-grade
+items were ruled on 2026-10-20: ADR-0001 chain of command, ADR-0002 everything in
+sessions (`bots/acquiredl/adrs/`). Market figures are a snapshot from 2026-10-20 UTC and will have moved.
 
 ## 1. The question
 
@@ -73,12 +73,12 @@ Each tier has a cap. A worker whose flag is unanswered reruns its last task.
 Two guilds of 10 for a day: about $2.20 at API rates, plus Opus escalations on
 the Claude Code subscription.
 
-Open decision (section 13): run the Haiku and Sonnet tiers through the API from a
-daemon, or as Claude Code sessions. Sessions cost no extra dollars, are recorded
-by loxodonta for free, but re-read a large context on every wake-up, hide the
-per-decision token count, and share the 5-hour window with the operator's own
-work. The API costs cents per hour and meters each decision exactly, which the
-experiment's score needs, but loxodonta records none of it as things stand (section 6).
+Ruled (ADR-0002): every model moment runs in a Claude Code session on the plan.
+Per guild, a Sonnet guildbank session and a Haiku reports session, each on a
+`/loop` cadence inside the one-hour prompt-cache lifetime, under the Opus
+session. No API billing; every report and ruling is recorded by loxodonta;
+metering is per session from the usage card, priced at API rates as the proxy.
+The rates table above is that proxy, not a bill.
 
 ## 4. The charter
 
@@ -145,9 +145,10 @@ Rule to check:
   back down as a task or a new script, builds the knowledge package from a
   proven run, does the post-mortem.
 - **The daemon (TypeScript, zero tokens).** Runs scripts for N bots, keeps the
-  ledger, runs the lag detector, writes the task board, calls the cheap tiers
-  for decision moments, appends to a jsonl, writes escalations to a file the
-  Opus session picks up.
+  ledger, runs the lag detector, writes the task board, hands finished runs to
+  the reports session and new reports and flags to the guildbank session through
+  the task board, appends to a jsonl, and writes escalations to a file the Opus
+  session picks up. It calls no model itself (ADR-0002).
 
 Personality cards: five lines in the report prompt plus a bias on execution
 discretion, which is the gap between the order and what happens: contribution
@@ -181,10 +182,10 @@ after the gate, not the mechanism.
 
 Receipts carry three constraints:
 
-- **loxodonta records Claude Code tool calls.** A daemon driving bots through
-  the API produces no receipts unless loxodonta grows a way for a process to
-  emit them. That is loxodonta work and the operator's call, and it is now a
-  term in the API-versus-sessions decision (section 13).
+- **loxodonta records Claude Code tool calls.** Every report and ruling runs in
+  a session (ADR-0002), so they are recorded. The daemon's own script runs are
+  not, until loxodonta grows a way for a process to emit receipts; that is
+  loxodonta work and the operator's call.
 - **An `execute_code` receipt carries only the tool name today**; the fix is
   held by the operator pending a security question. Packages should be built
   from script runs launched through Bash (`bun bots/...`), whose receipts carry
@@ -295,8 +296,9 @@ surface. The quest-loop ruling says chat stays untouched. Proposed, for the
 operator to rule on: log received chat to the local events file only, never into
 a prompt, never into a committed file. The summary model never sees it.
 
-**Cost.** Twenty bots at three runs an hour, three-line summaries on Haiku:
-about $0.02 an hour. Long narratives only on flagged runs. A story is a return
+**Cost.** Twenty bots at three runs an hour, three-line reports on Haiku: about
+$0.02 an hour at API rates, spent as plan usage in the reports session
+(ADR-0002). Long narratives only on flagged runs. A story is a return
 too: the project's ratified aim is fun and exploration, so stories flagged per
 guild per day sits beside return per effort in the scores table.
 
@@ -362,7 +364,8 @@ gets a budget of Opus "new idea" escalations per hour).
 
 Score: return per effort. Return is XP on the server's own level curve
 (2^(L/10), not OSRS), gold at exchange VWAP, quest points, and treasury. Effort
-is tokens weighted at API rates plus bot-minutes.
+is plan usage per session (the usage card and per-session context), priced at
+API rates as the proxy, plus bot-minutes.
 
 Metrics: time to the prosperity gate per guild; the floor-to-mean gap over time;
 within-guild Gini of gold; help events given and received per personality type
@@ -408,6 +411,8 @@ curve, action speed and gold are not OSRS.
 | Report moment | run end only | every 15 min | every 5 min |
 | Haiku reports per bot per hour (cap) | 4 | 8 | 20 |
 | Opus escalations per guild per hour | 0 | 1 | 3 |
+| Guildbank cadence, inside the one-hour cache | every 60 min | every 30 min | every 15 min |
+| Fleet budget, share of the plan's 5-hour window | 25% | 50% | 75% |
 | Lag trigger, quests behind guild mean | 2 | 3 | 5 |
 | Lag trigger, levels behind guild mean in one skill | 5 | 10 | 15 |
 | Beneficial test, gift value as share of treasury | 2% | 5% | 10% |
@@ -447,15 +452,13 @@ Medium confidence throughout; recalled, not re-checked online.
 
 ## 13. Open decisions and the operator's part
 
-ADR-grade. The first was restated by the operator on 2026-10-20 and written as
-ADR-0001; the second still awaits restatement before any code or ADR:
+ADR-grade. Both were restated by the operator on 2026-10-20 and written:
 
 1. Ruled: decisions come from the top. Workers execute, report and flag; flags
    go up, rulings come down. `bots/acquiredl/adrs/0001-chain-of-command.md`.
-2. API versus Claude Code sessions for the Haiku and Sonnet tiers. Three terms
-   now: dollars (API cheap, sessions free), metering (API exact, sessions
-   coarse), receipts (sessions recorded by loxodonta, API daemon not recorded
-   until loxodonta can take receipts from a process).
+2. Ruled: everything in sessions, kept warm inside the prompt cache. Per guild a
+   Sonnet guildbank session and a Haiku reports session on `/loop` cadences
+   under the Opus session. `bots/acquiredl/adrs/0002-everything-in-sessions.md`.
 
 Assumptions to confirm:
 
