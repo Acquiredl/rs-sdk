@@ -443,6 +443,20 @@ export async function buy(c: Ctx, keeper: RegExp, item: RegExp, n: number): Prom
     return count(c, item) - n0;
 }
 
+/**
+ * Protect from Melee (Prayer 43) on or off. The Restless Ghost's 28,125 Prayer
+ * XP lifts a fresh character to Prayer 47, so it is open for the Draynor jail
+ * (iteration 0 died there in ~10 s). Points drain while it is on and refill
+ * only at an altar (Lumbridge church), so switch it on at the door, off after.
+ */
+export async function protectMelee(c: Ctx, on: boolean): Promise<boolean> {
+    const active = c.sdk.isPrayerActive('protect_from_melee');
+    if (on === active) return true;
+    const r = on ? await c.bot.activatePrayer('protect_from_melee') : await c.bot.deactivatePrayer('protect_from_melee');
+    log(c, `protect from melee ${on ? 'on' : 'off'}: ${r.message} (points ${c.sdk.getPrayerState()?.prayerPoints})`);
+    return r.success;
+}
+
 /** HP guard: eat if below `eatAt`; returns false if HP is below `fleeAt` with no food. */
 export async function hpGuard(c: Ctx, eatAt = 6, fleeAt = 4): Promise<boolean> {
     const h = st(c).player!.hp;

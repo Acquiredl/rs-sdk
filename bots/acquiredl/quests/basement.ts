@@ -2,7 +2,8 @@
 // door rules in ernest-the-chicken.ts). Stops at the first failure and prints
 // what it learned, so a run can be steered from the real lever state.
 // Tokens: P:X pull lever X, I:X inspect lever X, D:1to2 go through a door,
-//         L:up / L:down puzzle ladder, G:oil can pick up.
+//         L:up / L:down puzzle ladder, G:oil can pick up, R: pull the secret-room
+//         lever (3096, 3357) to leave the room behind the bookcase.
 // Usage: bun bots/acquiredl/quests/basement.ts acquiredl P:F D:2to3 D:1to2 I:C ...
 import { runScript } from '../../../sdk/runner';
 import { st, pos, log, pickup, climb, type Ctx } from './lib';
@@ -56,6 +57,9 @@ await runScript(async ({ bot, sdk }) => {
             if (arg === 'up') { await sdk.sendWalk(3116, 9755, true); await sdk.waitForTicks(6); }
             ok = await climb(c, /^ladder$/i, arg === 'up' ? /^climb-up$/i : /^climb-down$/i);
             what = ok ? 'climbed' : 'failed';
+        } else if (kind === 'R') {
+            if (await raw(c, 3096, 3357, /^pull$/i)) for (let i = 0; i < 8 && pos(c).x < 3098; i++) await sdk.waitForTicks(1);
+            ok = pos(c).x >= 3098; what = ok ? 'out of the secret room' : 'still inside';
         } else if (kind === 'G') {
             ok = await pickup(c, /^oil can$/i); what = ok ? 'got the oil can' : 'no oil can';
         }

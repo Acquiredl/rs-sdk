@@ -145,6 +145,7 @@ const STEPS: Record<string, (c: Ctx, r: RunRecord, p: Progress) => Promise<boole
     },
     async oilcan(c) { return oilcan(c); },
     async finish(c, r, p) { return STEPS.oddenstein(c, r, p); },
+    async leave(c) { await leave(c); return !inside(c) && pos(c).level === 0; }, // out by the back door to the gate side
 };
 
 async function mix(c: Ctx) {
@@ -185,6 +186,9 @@ async function leave(c: Ctx) {
     await walkInto(c, 3123, 3359, 0);
     await door(c, 3123, 3360);
     await walkPts(c, [[3123, 3362], [3128, 3362], [3128, 3352]]);
+    // then back along the entry path to the gate side: from (3127, 3353) the
+    // planner's own route to the fountain stalled for 10 min (iteration 1)
+    await walkPts(c, [...TO_BACK_DOOR].reverse().slice(3) as [number, number][]);
 }
 
 // Lever basement (server quest_haunted.rs2: each Door checks %ernestlever bits,
@@ -210,7 +214,7 @@ const PLAN: [string, string][] = [
 ];
 
 async function rawLoc(c: Ctx, x: number, z: number, name: RegExp, op: RegExp): Promise<boolean> {
-    const l = (await c.sdk.scanNearbyLocs(15)).find(v => v.x === x && v.z === z && name.test(v.name));
+    const l = (await c.sdk.scanNearbyLocs(25)).find(v => v.x === x && v.z === z && name.test(v.name)); // 15 missed a door 16 tiles off (iteration 1)
     const o = l?.optionsWithIndex.find(v => op.test(v.text));
     if (!l || !o) { log(c, `no ${name} with ${op} at (${x}, ${z})`); return false; }
     await c.sdk.sendInteractLoc(l.x, l.z, l.id, o.opIndex);

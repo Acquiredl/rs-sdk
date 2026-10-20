@@ -44,7 +44,10 @@ const STEPS: Record<string, (c: Ctx, r: RunRecord, p: Progress) => Promise<boole
             log(c, `${dye.source}: ${has(c, dye)}`);
         }
         const red = c.sdk.findInventoryItem(/^red dye$/i), yellow = c.sdk.findInventoryItem(/^yellow dye$/i);
-        if (red && yellow) { await c.sdk.sendUseItemOnItem(red.slot, yellow.slot); await c.sdk.waitForTicks(2); }
+        if (red && yellow) {
+            await c.sdk.sendUseItemOnItem(red.slot, yellow.slot);
+            try { await c.sdk.waitForCondition(s => s.inventory.some(i => /^orange dye$/i.test(i.name)), 5_000); } catch { /* checked below */ }
+        }
         note(c, r, `orange=${has(c, /^orange dye$/i)} blue=${has(c, /^blue dye$/i)}`);
         return has(c, /^orange dye$/i) && has(c, /^blue dye$/i);
     },
@@ -54,7 +57,7 @@ const STEPS: Record<string, (c: Ctx, r: RunRecord, p: Progress) => Promise<boole
             const d = c.sdk.findInventoryItem(dye), m = c.sdk.findInventoryItem(MAIL);
             if (!d || !m) { note(c, r, `missing ${dye.source} or goblin mail`); continue; }
             await c.sdk.sendUseItemOnItem(d.slot, m.slot);
-            await c.sdk.waitForTicks(2);
+            try { await c.sdk.waitForCondition(s => s.inventory.some(i => out.test(i.name)), 5_000); } catch { /* checked below */ }
         }
         return has(c, ORANGE) && has(c, BLUE) && has(c, MAIL);
     },

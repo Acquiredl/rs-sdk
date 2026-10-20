@@ -13,7 +13,7 @@
 // paste eats it), clay + water (soft clay, the container comes back), bronze
 // bar, pink skirt (Thessalia, Varrock, 2 gp), 3 beers, about 50 gp in tolls.
 import { runScript } from '../../../sdk/runner';
-import { Progress, startRun, endRun, note, talk, travel, has, count, coins, st, log, pickup, journal, questCompleteSince, closeQuestScroll, useOnNpc, markDialogSeen, converse, type Ctx, type RunRecord } from './lib';
+import { Progress, startRun, endRun, note, talk, travel, has, count, coins, st, log, pickup, journal, questCompleteSince, closeQuestScroll, useOnNpc, markDialogSeen, converse, protectMelee, hpGuard, type Ctx, type RunRecord } from './lib';
 import { P, tollGate } from './places';
 
 const STEP = process.argv[3] ?? 'auto';
@@ -84,7 +84,7 @@ async function ned(c: Ctx, r: RunRecord, what: 'wig' | 'rope') {
     const before = what === 'wig' ? count(c, WIG) : count(c, /^rope$/i);
     const choices = what === 'wig'
         ? [/^ned, could you make other things from wool\?$/i, /^how about some sort of wig\?$/i, /^i have that now\. please, make me a wig\.$/i]
-        : [/^yes, i would like some rope\.$/i, /^i have some balls of wool\. could you make me some rope\?$/i];
+        : [/^yes, i would like some rope\.$/i, /^i have some balls of wool\. could you make me some rope\?$/i, /^okay, please sell me some rope\.$/i]; // 15 gp when under 4 balls
     const t = await talk(c, /^ned$/i, choices);
     if (!t.ok) note(c, r, `ned stopped: ${t.options.join(' | ')}`);
     const after = what === 'wig' ? count(c, WIG) : count(c, /^rope$/i);
@@ -144,8 +144,10 @@ async function paste(c: Ctx, r: RunRecord) {
 async function bronzeBar(c: Ctx, r: RunRecord) {
     if (has(c, /^bronze bar$/i)) return true;
     if (!has(c, /^copper ore$/i) || !has(c, /^tin ore$/i)) { note(c, r, 'bar needs copper and tin ore'); return false; }
-    await travel(c, 3227, 3254, 2);
-    const furnace = c.sdk.findNearbyLoc(/^furnace$/i);
+    // nearest furnace: Lumbridge (3226, 3255) or Falador (2975, 3368), which iteration 1 passed after Doric
+    const p = st(c).player!, f = Math.abs(p.worldX - 2975) + Math.abs(p.worldZ - 3368) < Math.abs(p.worldX - 3226) + Math.abs(p.worldZ - 3255) ? [2975, 3369] : [3227, 3254];
+    await travel(c, f[0], f[1], 2);
+    const furnace = c.sdk.findNearbyLoc(/^furnace$/i) ?? (await c.sdk.scanNearbyLocs(8)).find(l => /^furnace$/i.test(l.name));
     if (!furnace) { note(c, r, 'no furnace in view'); return false; }
     const u = await c.bot.useItemOnLoc(/^copper ore$/i, furnace);
     try { await c.sdk.waitForCondition(s => s.inventory.some(i => /^bronze bar$/i.test(i.name)), 10_000); } catch { /* checked */ }
@@ -162,17 +164,94 @@ async function softClay(c: Ctx, r: RunRecord) {
     return has(c, /^soft clay$/i);
 }
 
-/** Lady Keli, at stage exactly 20 with soft clay: the clay becomes a Key print. */
+/**
+ * Lady Keli, at stage exactly 20 with soft clay: the clay becomes a Key print.
+ * The 4 jail guards (lvl 26, aggressive at any level) all spawn outside Keli's
+ * room; their only way in is the north door (3128, 3246). Every guard swing
+ * runs if_close (npc_combat_melee.rs2), which ends the conversation even when
+ * Protect from Melee makes it a 0, so iteration 1 lost the first try (and
+ * nearly the bot). Go in under the prayer, shut the door, talk, leave the same way.
+ */
 async function imprint(c: Ctx, r: RunRecord, p: Progress) {
     if (!has(c, /^soft clay$/i)) { note(c, r, 'no soft clay'); return false; }
-    await travel(c, 3128, 3247, 1);           // outside the jail's north door (3128, 3246)
-    const t = await talk(c, /^lady keli$/i, [
-        /^heard of you\? you are famous in runescape!$/i, /^what is your latest plan then\?$/i,
-        /^can you be sure they will not try to get him out\?$/i, /^could i see the key please\?$/i,
-        /^could i touch the key for a moment\?$/i]);
-    if (!t.ok) note(c, r, `keli stopped: ${t.options.join(' | ')}`);
+    await travel(c, 3128, 3250, 1);
+    await protectMelee(c, true);
+    if (!(await jailRoom(c, true))) { note(c, r, "could not get into Keli's room"); await jailRoom(c, false); return false; }
+    await clearRoom(c, r);
+    await protectMelee(c, false);
+    for (let i = 0; i < 3 && !has(c, PRINT); i++) {
+        const t = await talk(c, /^lady keli$/i, [
+            /^heard of you\? you are famous in runescape!$/i, /^what is your latest plan then\?$/i,
+            /^can you be sure they will not try to get him out\?$/i, /^could i see the key please\?$/i,
+            /^could i touch the key for a moment\?$/i]);
+        if (!t.ok) note(c, r, `keli stopped: ${t.options.join(' | ')}`);
+        await hpGuard(c, 12, 1);
+    }
     if (has(c, PRINT)) p.mark('print');
+    await jailRoom(c, false);
     return has(c, PRINT);
+}
+
+/**
+ * A guard that followed the bot in before the door shut (iteration 1, second
+ * try) keeps closing the dialogue: kill it under Protect from Melee. Keli's
+ * room is x 3122-3129, z 3244-3246; the guards outside are behind the door.
+ */
+async function clearRoom(c: Ctx, r: RunRecord) {
+    const inRoom = (n: { x: number; z: number }) => n.x >= 3122 && n.x <= 3129 && n.z >= 3244 && n.z <= 3246;
+    for (let i = 0; i < 3; i++) {
+        const g = st(c).nearbyNpcs.find(n => /^jail guard$/i.test(n.name) && inRoom(n));
+        if (!g) return;
+        await protectMelee(c, true);
+        await c.bot.attack(g);
+        for (let t = 0; t < 120; t++) {
+            await c.sdk.waitForTicks(1);
+            const now = st(c).nearbyNpcs.find(n => n.index === g.index);
+            if (!now || now.hp === 0 || !inRoom(now)) break;
+        }
+        note(c, r, `guard in Keli's room: dealt with (hp ${st(c).player!.hp})`);
+        await c.sdk.waitForTicks(2);
+    }
+}
+
+/** In: open the north door, step to (3128, 3245), close it behind. Out: prayer on, open, walk north clear. */
+async function jailRoom(c: Ctx, enter: boolean): Promise<boolean> {
+    const doorNear = async (op: RegExp) => (await c.sdk.scanNearbyLocs(4)).find(l => /^door$/i.test(l.name) && Math.abs(l.x - 3128) <= 1 && Math.abs(l.z - 3246) <= 1 && l.optionsWithIndex.some(o => op.test(o.text)));
+    if (enter) {
+        // Iteration 1, rescue try 1: a guard that was already on the bot walked in
+        // behind it before the door shut. Kill whatever is adjacent first (the
+        // prayer makes its hits 0), on the accurate style: Attack is the weak stat.
+        if (st(c).combatStyle?.currentStyle !== 0) await c.sdk.sendSetCombatStyle(0);
+        for (let i = 0; i < 3; i++) {
+            const g = st(c).nearbyNpcs.filter(n => /^jail guard$/i.test(n.name) && n.distance <= 2 && n.hp !== 0).sort((a, b) => a.distance - b.distance)[0];
+            if (!g || (c.sdk.getPrayerState()?.prayerPoints ?? 0) < 12) break;
+            await c.bot.attack(g);
+            for (let t = 0; t < 130; t++) {
+                await c.sdk.waitForTicks(1);
+                const now = st(c).nearbyNpcs.find(n => n.index === g.index);
+                if (!now || now.hp === 0 || (c.sdk.getPrayerState()?.prayerPoints ?? 0) < 6) break;
+            }
+            log(c, `guard at the door: ${st(c).nearbyNpcs.some(n => n.index === g.index && n.hp !== 0) ? 'still up' : 'down'}; prayer ${c.sdk.getPrayerState()?.prayerPoints}`);
+        }
+        const d = await doorNear(/^open$/i);
+        if (d) { const o = await c.bot.openDoor(d); log(c, `jail north door: ${o.success ? 'opened' : o.message}`); }
+        await c.sdk.sendWalk(3128, 3245, true);
+        for (let i = 0; i < 12 && !(st(c).player!.worldX === 3128 && st(c).player!.worldZ === 3245); i++) await c.sdk.waitForTicks(1);
+        const open = await doorNear(/^close$/i);
+        if (open) {
+            await c.sdk.sendInteractLoc(open.x, open.z, open.id, open.optionsWithIndex.find(o => /^close$/i.test(o.text))!.opIndex);
+            await c.sdk.waitForTicks(2);
+        }
+        const inside = st(c).player!.worldZ <= 3245;
+        log(c, `jail room: inside=${inside} door ${(await doorNear(/^open$/i)) ? 'closed' : 'still open'} at (${st(c).player!.worldX}, ${st(c).player!.worldZ})`);
+        return inside;
+    }
+    await protectMelee(c, true);
+    const d = await doorNear(/^open$/i);
+    if (d) await c.bot.openDoor(d);
+    await travel(c, 3112, 3272, 2);
+    await protectMelee(c, false);
+    return true;
 }
 
 async function osman(c: Ctx, r: RunRecord, p: Progress) {
@@ -197,35 +276,43 @@ async function leela(c: Ctx, r: RunRecord, p: Progress) {
 
 async function rescue(c: Ctx, r: RunRecord, p: Progress) {
     if (count(c, /^beer$/i) < 3 && !p.has('joe')) { note(c, r, `need 3 beers, have ${count(c, /^beer$/i)}`); return false; }
-    await travel(c, 3127, 3247, 1);
-    if (!p.has('joe')) {
+    // Joe, Keli and the cell door are all in Keli's room: same shut-door entry as the imprint
+    await travel(c, 3128, 3250, 1);
+    await protectMelee(c, true);
+    if (!(await jailRoom(c, true))) { note(c, r, "could not get into Keli's room"); await jailRoom(c, false); return false; }
+    await clearRoom(c, r);
+    await protectMelee(c, false);
+    for (let i = 0; i < 3 && !p.has('joe'); i++) {
         const t = await talk(c, /^joe$/i, [/^i have some beer here, fancy one\?$/i]);
         if (count(c, /^beer$/i) === 0) p.mark('joe');
         note(c, r, `joe: beers left ${count(c, /^beer$/i)}; ${t.lines.slice(-1)[0] ?? ''}`);
-        if (!p.has('joe')) return false;
     }
+    if (!p.has('joe')) { await jailRoom(c, false); return false; }
     if (!p.has('keli-tied')) {
+        // iteration 1: "Cannot reach Lady Keli" once from inside the shut room; log where everyone is
+        log(c, `before rope: me (${st(c).player!.worldX}, ${st(c).player!.worldZ}); ${st(c).nearbyNpcs.filter(n => /keli|jail guard|joe/i.test(n.name)).map(n => `${n.name}@${n.x},${n.z} r=${n.reachable}`).join(' ')}`);
         const u = await useOnNpc(c, /^rope$/i, /^lady keli$/i, []);
         if (!has(c, /^rope$/i)) p.mark('keli-tied');
         note(c, r, `rope on Keli: ${u.ok} rope left=${has(c, /^rope$/i)}`);
-        if (!p.has('keli-tied')) return false;
+        if (!p.has('keli-tied')) { await jailRoom(c, false); return false; }
     }
-    // Keli respawns about 60 s after being tied: get through the door now
-    await travel(c, P.jailNorth.x, P.jailNorth.z, 0);
-    const door = c.sdk.findNearbyLoc(/^prison door$/i);
+    // Keli respawns about 60 s after being tied: key on the Prison Door (3123, 3243) from the north now
+    await c.sdk.sendWalk(P.jailNorth.x, P.jailNorth.z, true);
+    for (let i = 0; i < 10 && !(st(c).player!.worldX === P.jailNorth.x && st(c).player!.worldZ === P.jailNorth.z); i++) await c.sdk.waitForTicks(1);
+    const door = (await c.sdk.scanNearbyLocs(4)).find(l => /^prison door$/i.test(l.name));
     if (door) {
         markDialogSeen(c);
         const u = await c.bot.useItemOnLoc(KEY, door);
         log(c, `key on prison door: ${u.message} now (${st(c).player!.worldX}, ${st(c).player!.worldZ})`);
         await converse(c, []);
-    }
+    } else note(c, r, 'no prison door in view');
     const t = await talk(c, /^prince ali$/i, []);
     if (!has(c, SKIRT) && !has(c, PASTE)) p.mark('freed');
     note(c, r, `prince: freed=${p.has('freed')}; ${t.lines.slice(-1)[0] ?? ''}`);
-    // the cell door opens freely from inside
-    const d2 = c.sdk.findNearbyLoc(/^prison door$/i, { withOption: /^open$/i });
-    if (d2) await c.bot.openDoor(d2);
-    await travel(c, 3128, 3250, 2);
+    // out of the cell (its door opens freely from inside), then out of the room
+    const d2 = (await c.sdk.scanNearbyLocs(4)).find(l => /^prison door$/i.test(l.name) && l.optionsWithIndex.some(o => /^open$/i.test(o.text)));
+    if (d2 && st(c).player!.worldZ < 3244) { await c.bot.openDoor(d2); await c.sdk.sendWalk(P.jailNorth.x, P.jailNorth.z, true); await c.sdk.waitForTicks(4); }
+    await jailRoom(c, false);
     return p.has('freed');
 }
 
