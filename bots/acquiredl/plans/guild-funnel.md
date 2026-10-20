@@ -2,7 +2,7 @@
 
 Status: plan, drafted 2026-10-19 with the operator. Nothing built. Two ADR-grade
 items wait for the operator to restate them in their own words before any code
-(section 12). Market figures are a snapshot from 2026-10-20 UTC and will have moved.
+(section 13). Market figures are a snapshot from 2026-10-20 UTC and will have moved.
 
 ## 1. The question
 
@@ -12,7 +12,9 @@ where the personality mix is the variable and return per effort is the score. Th
 operator added, on 2026-10-19: a hard cap of 10 per guild, one shared end goal for
 every guild, a weakest-link ground rule, a guildbank that collects tax and runs a
 warehouse on the exchange, a 1,000,000 gold guild treasury as the prosperity goal,
-and loxodonta receipts travelling inside the knowledge that members share.
+loxodonta receipts travelling inside the knowledge that members share, and
+(asked 2026-10-20) a replay and a story log after each run so the fun runs can
+become a video.
 
 ## 2. What already exists
 
@@ -67,7 +69,7 @@ gatherer that hits its hourly cap reruns its last script.
 Two guilds of 10 for a day: about $2.20 at API rates, plus Opus escalations on
 the Claude Code subscription.
 
-Open decision (section 12): run the Haiku and Sonnet tiers through the API from a
+Open decision (section 13): run the Haiku and Sonnet tiers through the API from a
 daemon, or as Claude Code sessions. Sessions cost no extra dollars, are recorded
 by loxodonta for free, but re-read a large context on every wake-up, hide the
 per-decision token count, and share the 5-hour window with the operator's own
@@ -175,7 +177,7 @@ Receipts carry three constraints:
 - **loxodonta records Claude Code tool calls.** A daemon driving bots through
   the API produces no receipts unless loxodonta grows a way for a process to
   emit them. That is loxodonta work and the operator's call, and it is now a
-  term in the API-versus-sessions decision (section 12).
+  term in the API-versus-sessions decision (section 13).
 - **An `execute_code` receipt carries only the tool name today**; the fix is
   held by the operator pending a security question. Packages should be built
   from script runs launched through Bash (`bun bots/...`), whose receipts carry
@@ -188,7 +190,84 @@ Receipts carry three constraints:
 Metrics the package adds: knowledge packages given and received per
 personality, and package reuse success (did the script run clean for the receiver).
 
-## 7. The warehouse
+## 7. Replay and story log
+
+After each run the operator can replay what happened or read a summary, and
+runs that turned into stories are indexed for a video later. Three layers, from
+free to cheap, built on what the quest scripts already write.
+
+**Worked example, from iteration zero.** At the Wizard Tower the basement ladder
+climb failed, the planner routed to the basement's coordinates on the surface,
+and the bot walked 800 tiles into the deep Wilderness, then back to Varrock at
+3 of 13 health, and ate. Under this section that run leaves: an events file with
+`climb_failed`, `route_planned` (800 tiles, north), `hp_low` (3/13), `ate`, and
+a `recovered` event with the walk time; a replay that prints those events in
+order beside the run notes and the receipt rows for the same minutes; a summary
+written at run end by the model that ran the bot, in the bot's personality
+voice, with a story score of 5 and the pitch "walked 800 tiles the wrong way and
+came back on 3 health"; and one line in the story index pointing at the
+summary, the screenshots, and the receipt addresses.
+
+**Layer 1, events, zero tokens.** The daemon and the scripts append typed events
+to `events-<bot>.jsonl`, next to the existing `runs-<bot>.jsonl`. The vocabulary
+is fixed and small: run start and end (the run record already has these), quest
+step and quest complete, level up, death with the loot lost, item lost, trade
+completed, exchange fill, escalation, help event given or received, screenshot
+taken (path), and chat received. The `record()` and `note()` helpers in
+`bots/acquiredl/quests/lib.ts` are the seed; this adds `event(type, data)`.
+Every event carries the bot, the tick, the position, and the loxodonta session
+id, so a replay can cross-link to the verifiable record.
+
+**Layer 2, replay, zero tokens.** `bun bots/guild/replay.ts <bot> [from] [to]`
+prints a timeline: events merged with the run notes, the receipt rows for the
+same window from `supervisor.py timeline`, and the screenshots taken in it.
+`bots/acquiredl/quests/runs_table.ts` is the seed. Later, and only if the stories
+earn it, an HTML page that plays the position trace over the map, which needs no
+game client and can replay any past run.
+
+**Layer 3, summary, one decision moment per run.** At run end the tier that ran
+the bot writes `summary` into the run record: three lines always, what was
+attempted, what happened, the numbers. When the run holds a flagged event (a
+death, a quest complete, an escalation, a route into the Wilderness, a trade
+above a size, or anything the card finds surprising) it writes a longer
+narrative in the bot's own voice and sets `story: {score, pitch}`. The
+personality card is the narrator: a greedy bot tells its death as a robbery, a
+cautious one as a lesson. That voice is the video.
+
+**Story index.** `bots/guild/STORIES.md`, one line per story at or above the
+threshold: date, bot, score, pitch, and links to the summary, the screenshots,
+and the receipt addresses. The daemon appends it; the operator skims it. It can
+be seeded today from the lab logs: the Wilderness walk, the two Draynor deaths
+with their loot lists, the Imp Catcher hunt for the white bead.
+
+**Visuals.** The lite client answers a screenshot request with an empty image
+(`server/webclient/src/lite/runner.ts`, `screenshot_response`), so headless
+members produce no pictures. Iteration 1's 73 journal screenshots came from a
+rendering client. Three ways up, as a panel:
+
+| Visuals | Low | Default | High |
+|---|---|---|---|
+| Source | Screenshots from whichever bot sits on a browser client, as iteration 1 did | A camera account outside the guild, on a browser client, that follows the bot in a story in progress (Follow is player option 3) and snaps on events | An HTML replay rendered from the position trace and events, no client needed |
+| Video path | Stills | Screen-record the camera client | Record the replay page |
+
+The camera is not a guild member and does not count against the cap. Medium
+confidence that Follow holds at range; it needs the camera near the protagonist.
+
+**Chat.** Other players' lines are story material and a prompt-injection
+surface. The quest-loop ruling says chat stays untouched. Proposed, for the
+operator to rule on: log received chat to the local events file only, never into
+a prompt, never into a committed file. The summary model never sees it.
+
+**Cost.** Twenty bots at three runs an hour, three-line summaries on Haiku:
+about $0.02 an hour. Long narratives only on flagged runs. A story is a return
+too: the project's ratified aim is fun and exploration, so stories flagged per
+guild per day sits beside return per effort in the scores table.
+
+**Opsec before any video.** Screenshots show the chat box and other players'
+names, and receipt entries hold local paths. The operator reviews every frame
+and package before publishing; bot names stay on the alias pattern.
+
+## 8. The warehouse
 
 The treasury backs a stockpile of commonly traded goods that the guildbank sells
 on the exchange, a floor to the market, in one skill line to start. The
@@ -237,7 +316,7 @@ carries 28 stacks (notes allowed). 288 bank slots means stock is not the limit.
 **Metrics.** Treasury growth per day, inventory turnover, share of niche volume,
 spread captured per trade, stockouts (floor failures).
 
-## 8. The experiment
+## 9. The experiment
 
 A guild is up to 9 gatherers plus the guildbank under one charter. Every guild
 has the same charter, so the treatment is the personality mix, plus an optional
@@ -252,7 +331,8 @@ Metrics: time to the prosperity gate per guild; the floor-to-mean gap over time;
 within-guild Gini of gold; help events given and received per personality type
 (knowledge packages, items, direct); package reuse success; escalations;
 recognition events (inbound trade and help requests from non-members, and how
-many were fulfilled).
+many were fulfilled). Stories flagged per guild per day, since fun is a
+ratified return.
 
 Prediction to test first. Under a weakest-link rule the known risk is not
 free-riding but drag: strong members slow down to lift the floor, and the guild
@@ -268,19 +348,19 @@ Confound. Trees, rocks and the exchange are shared with strangers' bots.
 Measure per-bot XP per hour variance in Stage 1 before attributing anything to
 personality.
 
-## 9. Staging
+## 10. Staging
 
 Each stage ends in a resumable state: committed or noted, next step named.
 
 | Stage | Bots | Model calls | Done when |
 |---|---|---|---|
 | 0, baseline | 0 new | none | The current quest log has a credits column (5-hour percentage before and after each session), giving return per credit for the single-Opus style |
-| 1, two bots | 2 | none | Two lite runners through a private gateway; one scripted trade worker to mule; the daemon runs both |
-| 2, one guild | 3, then 5, then 10 | Haiku decisions, Sonnet guildbank | Charter, ledger, lag detector and ladder running; the steel route proven end to end with one miner, one smelter and the guildbank; the first knowledge package built from a proven run and consumed clean by a laggard; first result: who gives, who receives. Chat off |
+| 1, two bots | 2 | none | Two lite runners through a private gateway; one scripted trade worker to mule; the daemon runs both; the events log and the replay CLI print the run |
+| 2, one guild | 3, then 5, then 10 | Haiku decisions, Sonnet guildbank | Charter, ledger, lag detector and ladder running; the steel route proven end to end with one miner, one smelter and the guildbank; the first knowledge package built from a proven run and consumed clean by a laggard; first result: who gives, who receives; run summaries on and first entries in the story index. Chat off |
 | 3, second guild | 20 | as above | Inter-guild recognition over private messages and trade; first between-guild comparison |
 | 4, outward | 20 | as above | Reached only through the prosperity gate. Public chat on with loxodonta watching, in small reversible steps with a named end state; replies triaged by the Opus session |
 
-## 10. Knobs
+## 11. Knobs
 
 Three-point panels. Recalibrate from the Stage 0 baseline; this server's level
 curve, action speed and gold are not OSRS.
@@ -299,8 +379,12 @@ curve, action speed and gold are not OSRS.
 | Prosperity gate, guild treasury in gold | 250,000 | 1,000,000 | 5,000,000 |
 | Outward time after the gate | 20% | 40% | 60% |
 | Max share of an item's listed supply held | 20% | 35% | 50% |
+| Summary policy | flagged runs only | every run three lines, narrative on flagged | every run with narrative |
+| Story threshold, score of 1 to 5 to enter the index | 4 | 3 | 2 |
+| Narrative length on a flagged run, lines | 5 | 10 | 20 |
+| Visuals | screenshots from a browser-client bot | camera account | HTML replay |
 
-## 11. Prior art
+## 12. Prior art
 
 Medium confidence throughout; recalled, not re-checked online.
 
@@ -324,7 +408,7 @@ Medium confidence throughout; recalled, not re-checked online.
   chains. Closest to a guildbank. RuneScape merchant clans are the anti-pattern
   the net-positive guards forbid.
 
-## 12. Open decisions and the operator's part
+## 13. Open decisions and the operator's part
 
 ADR-grade, awaiting the operator's restatement in their own words before any
 code or ADR is written:
@@ -340,6 +424,10 @@ Assumptions to confirm:
 - The guildbank counts as one of the 10.
 - "Levels behind" is per skill against the guild mean for that skill, since
   skill unlocks are what the rule is meant to catch. Total level is the alternative.
+- Logging received chat to the local events file for stories needs a ruling;
+  the quest-loop ruling says chat stays untouched (section 7).
+- A camera account outside the guild is allowed and does not count against
+  the cap (section 7).
 
 The operator owns the examples. Three to five cases of "ledger state plus
 personality card gives this response" become the daemon's tests. For instance:
@@ -357,9 +445,10 @@ Not in scope until Stage 2 proves the steel route: pickaxes and niche gear,
 other skill lines, more than one warehouse account, receipts emitted from a
 process outside Claude Code.
 
-## 13. End state
+## 14. End state
 
 `bots/guild/` holds the daemon, the charter, the task board, the personality
-cards, the book of knowledge packages with receipts, and a scores table. A run
-report compares two guilds of 10 on return per effort, treasury growth and help
-events, and says which personalities gave and which received.
+cards, the book of knowledge packages with receipts, the events files and the
+replay CLI, the story index, and a scores table. A run report compares two
+guilds of 10 on return per effort, treasury growth and help events, says which
+personalities gave and which received, and lists the stories worth a video.
