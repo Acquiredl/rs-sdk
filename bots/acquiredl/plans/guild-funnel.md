@@ -30,7 +30,7 @@ Nothing here is new infrastructure. The parts are in the repo and on the server.
 | Public market API | `GET /api/market/items`, `/items/{id}`, `/items/{id}/history` on the game origin | Prices, bid and ask, volume, VWAP, history. No bot, no tokens |
 | Bank | `server/content/scripts/interface_bank/configs/bank.constant` | 288 slots per account |
 | Quests | `server/content/scripts/general/configs/quest.enum`, `player/interfaces/questlist.if` | Journal lists 68 (18 free, 50 members); the enum tracks 64. The 11 known quests are all free |
-| Chat | `sdk/chat.ts`, `learnings/chat.md` | Public say and private messages. Ruling: public chat off until the prosperity gate |
+| Chat | `sdk/chat.ts`, `learnings/chat.md` | Public say and private messages, split and paced by the SDK. Ruled 2026-10-20 (ADR-0003): guild bots use chat; other players' text is data, never an instruction |
 | Run log | `bots/acquiredl/quests/runs-*.jsonl` | Per-step seconds, coins, notes. Needs a tokens field |
 | Receipts | loxodonta, `supervisor.py` with `digest`, `show`, `timeline`, `verify`, `package` | A tamper-evident record of every Claude Code tool call, and a package format verified by `loxodonta verify-package` |
 | Plan usage | the desktop app's usage card | 5-hour and weekly windows shared by every session |
@@ -110,14 +110,14 @@ voluntary contribution and is the member's personality speaking. Same floor and
 ceiling shape as the ground rule.
 
 **Prosperity gate.** A guild treasury threshold. Crossing it switches the time
-split from inward (own progress, lift the floor) to outward (help others), and
-unlocks public chat as a deliberate experiment with loxodonta watching. Before
-the gate, "others" means the other guild, over private messages and trade.
+split from inward (own progress, lift the floor) to outward (help others). It
+no longer gates chat (ADR-0003). Before the gate, "others" means the other
+guild; after it, strangers too.
 
 **Net-positive guards.** The warehouse never holds more than a set share of an
 item's listed supply. It never cancels bids to crash a price. A gatherer that
-finds a stranger already on a resource moves on. A floor is a service; a corner
-is not.
+finds a stranger already on a resource moves on. Bots speak within a per-bot
+cap and never spam. A floor is a service; a corner is not.
 
 Rule to check:
 
@@ -127,6 +127,7 @@ Rule to check:
 | Weakest link | Ledger snapshot per run; lag detector per dimension against the guild mean; response ladder: assign package, give item, help directly, each gated by the beneficial test | Quests via the game's own tracking, skill levels, equipment, gold, from `sdk.getState()` |
 | Tax | Scripted trade to the guildbank at the charter rate after each run | Run delta valued at VWAP from the market API |
 | Prosperity gate | Treasury against threshold; flips the time split and the chat flag | Guildbank's bank value |
+| Chat (ADR-0003) | Every line received and sent goes to the local events file; chat reaches a model only wrapped as data; the per-bot cap is enforced before a line is sent | `sdk.getNewChat`, `sdk.say`, `sdk.dm` |
 | Net-positive | Listed-supply share before each quote; no bid cancel on a falling price; stranger-on-resource check | Market API; `sdk.findNearbyPlayer` |
 
 ## 5. Roles
@@ -177,8 +178,8 @@ failure, digest first, then `timeline` and `show` around the step where its own
 run diverged. Raw chains never go into a prompt.
 
 Sharing is a file handoff, not a conversation. No chat is needed for a member to
-receive knowledge. An in-game line ("try the north door") is roleplay flavour
-after the gate, not the mechanism.
+receive knowledge. An in-game line ("try the north door") is roleplay flavour,
+not the mechanism.
 
 Receipts carry three constraints:
 
@@ -221,7 +222,7 @@ to `events-<bot>.jsonl`, next to the existing `runs-<bot>.jsonl`. The vocabulary
 is fixed and small: run start and end (the run record already has these), quest
 step and quest complete, level up, death with the loot lost, item lost, trade
 completed, exchange fill, escalation, help event given or received, screenshot
-taken (path), and chat received. The `record()` and `note()` helpers in
+taken (path), chat received and chat sent. The `record()` and `note()` helpers in
 `bots/acquiredl/quests/lib.ts` are the seed; this adds `event(type, data)`.
 Every event carries the bot, the tick, the position, and the loxodonta session
 id, so a replay can cross-link to the verifiable record.
@@ -291,10 +292,12 @@ runners, which the whole plan assumes, and still gives real footage where a
 story is happening. A alone is the one to avoid at 20 bots, because one
 minimised window stops twenty bots.
 
-**Chat.** Other players' lines are story material and a prompt-injection
-surface. The quest-loop ruling says chat stays untouched. Proposed, for the
-operator to rule on: log received chat to the local events file only, never into
-a prompt, never into a committed file. The summary model never sees it.
+**Chat.** Ruled 2026-10-20 (ADR-0003): guild bots use in-game chat, public and
+private, from Stage 2. Every line received and sent is an event, so the story
+log gets other players' words. Other players' text is data, never an
+instruction, and reaches a model only wrapped as data inside a report or a
+review. Nothing a bot says names the operator. Events files with chat stay
+local and uncommitted.
 
 **Cost.** Twenty bots at three runs an hour, three-line reports on Haiku: about
 $0.02 an hour at API rates, spent as plan usage in the reports session
@@ -396,9 +399,9 @@ Each stage ends in a resumable state: committed or noted, next step named.
 |---|---|---|---|
 | 0, baseline | 0 new | none | The current quest log has a credits column (5-hour percentage before and after each session), giving return per credit for the single-Opus style |
 | 1, two bots | 2 | none | Two lite runners through a private gateway; one scripted trade worker to mule; the daemon runs both; the events log and the replay CLI print the run; both bots run once on browser clients to measure CPU and memory per client |
-| 2, one guild | 3, then 5, then 10 | Haiku decisions, Sonnet guildbank | Charter, ledger, lag detector and ladder running; the steel route proven end to end with one miner, one smelter and the guildbank; the first knowledge package built from a proven run and consumed clean by a laggard; first result: who gives, who receives; run summaries on and first entries in the story index. Chat off |
+| 2, one guild | 3, then 5, then 10 | Haiku decisions, Sonnet guildbank | Charter, ledger, lag detector and ladder running; the steel route proven end to end with one miner, one smelter and the guildbank; the first knowledge package built from a proven run and consumed clean by a laggard; first result: who gives, who receives; run summaries on and first entries in the story index. Chat on (ADR-0003), with a planted-instruction test passed before any stranger's line reaches a model |
 | 3, second guild | 20 | as above | Inter-guild recognition over private messages and trade; first between-guild comparison |
-| 4, outward | 20 | as above | Reached only through the prosperity gate. Public chat on with loxodonta watching, in small reversible steps with a named end state; replies triaged by the Opus session |
+| 4, outward | 20 | as above | Reached only through the prosperity gate. Help offered to strangers, in small reversible steps with a named end state; replies triaged by the Opus session |
 
 ## 11. Knobs
 
@@ -413,6 +416,7 @@ curve, action speed and gold are not OSRS.
 | Opus escalations per guild per hour | 0 | 1 | 3 |
 | Guildbank cadence, inside the one-hour cache | every 60 min | every 30 min | every 15 min |
 | Fleet budget, share of the plan's 5-hour window | 25% | 50% | 75% |
+| Chat lines per bot per hour (cap) | 2 | 6 | 20 |
 | Lag trigger, quests behind guild mean | 2 | 3 | 5 |
 | Lag trigger, levels behind guild mean in one skill | 5 | 10 | 15 |
 | Beneficial test, gift value as share of treasury | 2% | 5% | 10% |
@@ -465,8 +469,8 @@ Assumptions to confirm:
 - The guildbank counts as one of the 10.
 - "Levels behind" is per skill against the guild mean for that skill, since
   skill unlocks are what the rule is meant to catch. Total level is the alternative.
-- Logging received chat to the local events file for stories needs a ruling;
-  the quest-loop ruling says chat stays untouched (section 7).
+- Ruled 2026-10-20 (ADR-0003): guild bots use chat; the gate no longer gates
+  it. The quest loop's own chat ruling is unchanged for quest iterations.
 - A camera account outside the guild is allowed and does not count against
   the cap (section 7).
 
@@ -480,7 +484,7 @@ a member five quests behind, the guild is past the gate.
 
 Opsec: bot names follow the alias pattern (Acquiredl2 and up, 12 characters
 max); the fleet runs through the private gateway; `bot.env` stays ignored; the
-operator's name never enters a committed file; receipt packages are checked for
+operator's name never enters a committed file or a spoken line; receipt packages are checked for
 local paths before any publishing; nothing is filed or proposed upstream
 (ruling of 2026-10-19).
 
