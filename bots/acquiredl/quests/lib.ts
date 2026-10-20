@@ -10,6 +10,7 @@
 //               is what scripts resume from. done() also watches for the
 //               server's "Congratulations! Quest complete!" message.
 import type { BotActions } from '../../../sdk/actions';
+import { BotSDK as BotSDKClass } from '../../../sdk/index';
 import type { BotSDK } from '../../../sdk/index';
 import type { BotWorldState, NearbyLoc, NearbyNpc } from '../../../sdk/types';
 import { findLongPath, findDoorsAlongPath } from '../../../sdk/pathfinding';
@@ -18,6 +19,22 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 export type Ctx = { bot: BotActions; sdk: BotSDK };
+
+// Ride out state gaps. waitForTicks throws after ticks*1000+5000 ms without a
+// state update; on a busy server (iteration 1, ~1,600 online) the browser
+// client's state paused that long several times a minute and killed every
+// script mid-step. Everything in the SDK waits through this method, so
+// patching it here (not in the SDK) covers bot.* actions too.
+const waitForTicks0 = BotSDKClass.prototype.waitForTicks;
+BotSDKClass.prototype.waitForTicks = async function (this: BotSDK, ticks = 1) {
+    for (let gap = 1; ; gap++) {
+        try { return await waitForTicks0.call(this, ticks); }
+        catch (e) {
+            if (!/safety timeout/.test((e as Error).message) || gap > 10) throw e;
+            console.log(`   (state gap ${gap}, still waiting)`);
+        }
+    }
+};
 
 const HERE = import.meta.dir;
 export const BOT = process.env.BOT_USERNAME ?? process.argv[2] ?? 'unknown';
@@ -189,7 +206,7 @@ export async function converse(c: Ctx, choices: RegExp[] = [], opts: { timeoutMs
         printNewDialog(c, lines);
         const d = st(c).dialog;
         if (!d.isOpen) {
-            if (++closedTicks >= 3) break;
+            if (++closedTicks >= 5) break; // 3 ended Cook's talk between pages (iteration 1)
             await c.sdk.waitForTicks(1);
             continue;
         }

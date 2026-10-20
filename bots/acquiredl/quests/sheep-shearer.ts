@@ -48,8 +48,8 @@ await runScript(async ({ bot, sdk }) => {
     } else if (step === 'shear') {
         ok = await shear(c, target);
     } else if (step === 'spin') {
-        ok = await spin(c);
-        await castleTo(c, 0);
+        ok = await spin(c); // STAY=1 stays on plane 1 for the Duke (Rune Mysteries)
+        if (!process.env.STAY) await castleTo(c, 0);
     }
     await journal(c, 'sheep', step);
     endRun(c, r, ok ? 'ok' : 'not confirmed');

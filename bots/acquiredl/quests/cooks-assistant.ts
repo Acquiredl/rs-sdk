@@ -33,7 +33,19 @@ await runScript(async ({ bot, sdk }) => {
             await sdk.waitForTicks(2); await closeQuestScroll(c); p.mark('complete');
         }
         if (!t.ok) note(c, r, `dialogue stopped: ${t.options.join(' | ')}`);
+        // free kitchen floor spawns: the second pot makes Prince Ali's flour, the jug carries his water
+        if (step === 'start') for (const it of [/^pot$/i, /^jug$/i]) if (c.sdk.findGroundItem(it)) note(c, r, `kitchen ${it.source}: ${await pickup(c, it, 2)}`);
         ok = p.has(step === 'start' ? 'started' : 'complete');
+    } else if (step === 'bin') {
+        // flour already milled (the bin keeps up to 30 per player): Empty it into each held pot
+        await travel(c, P.millDoor.x, P.millDoor.z - 1, 1);
+        await travel(c, 3165, 3306, 1);
+        for (let i = 0; i < 6 && has(c, /^pot$/i); i++) {
+            const e = await c.bot.interactLoc(/^flour bin$/i, /^empty$/i);
+            await sdk.waitForTicks(2);
+            log(c, `flour bin: ${e.message}; flour=${count(c, FLOUR)}`);
+        }
+        ok = has(c, FLOUR);
     } else {
         const want = step === 'gather' ? ['flour', 'egg', 'milk'] : [step];
         if (want.includes('flour') && count(c, FLOUR) < FLOURS) await flour(c, r);
@@ -69,7 +81,9 @@ async function flour(c: Ctx, r: ReturnType<typeof startRun>) {
         await c.sdk.waitForTicks(3);
     }
     while (pos(c).level > 0) if (!(await climb(c, /^ladder$/i, /^climb-down$/i))) break;
-    for (let i = 0; i < pots && has(c, /^pot$/i); i++) {
+    // the bin's Empty sometimes does nothing ("Nothing happened"); the flour stays in the bin, so retry
+    const target = count(c, FLOUR) + pots;
+    for (let i = 0; i < pots * 3 && count(c, FLOUR) < target && has(c, /^pot$/i); i++) {
         const n0 = count(c, FLOUR);
         const e = await c.bot.interactLoc(/^flour bin$/i, /^empty$/i);
         try { await c.sdk.waitForCondition(s => s.inventory.filter(x => FLOUR.test(x.name)).length > n0, 5_000); } catch { /* logged below */ }

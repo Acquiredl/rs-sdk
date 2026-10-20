@@ -72,7 +72,12 @@ async function run(c: Ctx, p: Progress, step: string): Promise<boolean> {
 async function toJuliet(c: Ctx) {
     if (pos(c).level === 1) return;
     // The house's doors (3155, 3428) (3160, 3432) (3155, 3433) spawn closed and the
-    // long-range planner finds no way in; bot.walkTo opens them on its route.
+    // long-range planner finds no way in. Iteration 1: walkInto tried those
+    // five doors first (~165 s per visit) before the north door (3160, 3440),
+    // the one that works, so open that one first. Untested as written.
+    await travel(c, 3160, 3442, 1);
+    const north = (await c.sdk.scanNearbyLocs(5)).find(l => l.x === 3160 && l.z === 3440 && l.optionsWithIndex.some(o => /^open$/i.test(o.text)));
+    if (north) { const o = await c.bot.openDoor(north); log(c, `Juliet north door: ${o.success ? 'opened' : o.message}`); }
     const w = await walkInto(c, P.julietStairs.x, P.julietStairs.z - 1, 1);
     log(c, `to Juliet's stairs: ${w ? 'ok' : 'failed'} at (${pos(c).x}, ${pos(c).z})`);
     await climb(c, /^staircase$/i, /^climb-up$/i);
