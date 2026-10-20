@@ -470,8 +470,10 @@ Assumptions to confirm:
 - A camera account outside the guild is allowed and does not count against
   the cap (section 7).
 
-The operator owns the examples. Three to five cases of "task plus run plus
-personality card gives this execution and this report" become the daemon's tests. For instance:
+The operator owns the examples. Five cases of "task plus run plus personality
+card gives this execution and this report" become the daemon's tests. Drafted
+on 2026-10-20 in `guild-funnel-cases.md` beside this file, for the operator to
+edit; not final until each line is changed or kept. For instance:
 a member two quests behind the mean with no package for the next quest, guildbank
 is sharing; a member lacks a 1-gold tool, treasury is 500, guildbank is greedy;
 a member five quests behind, the guild is past the gate.
