@@ -85,9 +85,20 @@ await runScript(async ({ bot, sdk }) => {
         }
         if (!killed) continue;
         kills++;
-        await sdk.waitForTicks(2);
+        // Drops land after the death animation, not when hp reaches 0. Wait (up to
+        // 8 ticks) for something to appear at the kill tile before looting: with a
+        // fixed 2-tick wait, iteration 1 went 42 imp kills without a black or
+        // white bead (about a 3% chance), so beads were probably landing unseen.
+        const near = (g: { x: number; z: number }) => Math.max(Math.abs(g.x - lastX), Math.abs(g.z - lastZ)) <= 2;
+        let ground: Awaited<ReturnType<typeof sdk.scanGroundItems>> = [];
+        for (let t = 0; t < 8; t++) {
+            await sdk.waitForTicks(1);
+            ground = (await sdk.scanGroundItems(6)).filter(near);
+            if (ground.length && t >= 1) break;
+        }
+        if (process.env.LOG_DROPS) log(c, `ground at kill ${kills}: ${ground.map(g => g.name).join(', ') || 'nothing'}`);
         if (LOOT) {
-            const drops = (await sdk.scanGroundItems(6)).filter(g => LOOT.test(g.name) && Math.max(Math.abs(g.x - lastX), Math.abs(g.z - lastZ)) <= 2);
+            const drops = ground.filter(g => LOOT.test(g.name));
             for (const g of drops) {
                 const ok = await pickup(c, new RegExp(`^${g.name}$`, 'i'), 2);
                 log(c, `loot ${g.name}: ${ok}`);
